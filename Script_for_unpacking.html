@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Data Processor</title>
+    <style>
+        body { margin: 20px; font-family: Arial, sans-serif; }
+        .container { display: flex; gap: 20px; margin-top: 20px; }
+        .editor, .output { flex: 1; }
+        textarea { width: 100%; height: 300px; padding: 10px; }
+        .output-content { 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            height: 300px; 
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .tabs { margin-bottom: 10px; }
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #f0f0f0;
+            margin-right: 5px;
+        }
+        .tab-btn.active {
+            background: #fff;
+            border-bottom: 1px solid #fff;
+        }
+        button { margin-top: 10px; padding: 8px 16px; }
+    </style>
+</head>
+<body>
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="jobchange">JobChange</button>
+        <button class="tab-btn" data-tab="library">Library(Enemy)</button>
+    </div>
+
+    <div class="container">
+        <div class="editor">
+            <h3>Ввод данных:</h3>
+            <textarea id="input-data" placeholder="Введите данные здесь..."></textarea>
+        </div>
+        <div class="output">
+            <h3>Результат:</h3>
+            <div id="output-content" class="output-content"></div>
+            <button id="copy-btn">Копировать результат</button>
+        </div>
+    </div>
+
+    <script>
+        const processors = {
+            jobchange: function(input) {
+                const processSingleEntry = (entryStr) => {
+                    entryStr = entryStr.trim();
+                    if (!entryStr) return "";
+                    
+                    // Разбиваем запись на строки и убираем начальные пробелы
+                    const lines = entryStr.split('\n')
+                        .map(line => line.trimStart())
+                        .filter(line => line.length > 0);
+                    
+                    // Обработка первой строки с заголовком
+                    const firstLineMatch = lines[0].match(/^\s*(\d+)\s*=>\s*#?(.*)/);
+                    if (!firstLineMatch) return "Ошибка: неверный формат заголовка";
+                    const number = firstLineMatch[1].trim();
+                    const title = firstLineMatch[2].trim();
+                    
+                    // Извлекаем содержимое после заголовка
+                    const content = lines.slice(1).join('\n');
+                    const listStart = content.indexOf("[[");
+                    const listEnd = content.lastIndexOf("]]");
+                    if (listStart === -1) return "Ошибка: отсутствует [[";
+                    
+                    const listsStr = content.slice(listStart + 2, listEnd >= 0 ? listEnd : undefined);
+                    
+                    // Разбиваем списки и извлекаем строки между кавычками
+                    const listParts = listsStr.split(/\s*\]\s*,\s*\[\s*/);
+                    const list1 = listParts[0].match(/"([^"]+)"/g)?.map(s => s.slice(1, -1)) || [];
+                    const list2 = listParts[1]?.match(/"([^"]+)"/g)?.map(s => s.slice(1, -1)) || [];
+                    
+                    // Формирование результата для записи
+                    let output = `${number} # ${title}\n${list1.join('')}\n\n`;
+                    output += list2.filter(i => i.trim()).join('\n');
+                    return output;
+                };
+
+                // Разбиваем входной текст на записи, где каждая начинается с возможных пробелов, затем цифр и "=>"
+                const entries = input.split(/(?=^\s*\d+\s*=>)/m)
+                                     .map(e => e.trim())
+                                     .filter(e => e.length > 0);
+                return entries.map(entry => processSingleEntry(entry)).join('\n\n');
+            },
+            library: function(input) {
+                // Разбиваем входной текст на записи, где каждая начинается с числа, стрелки "=>" и открывающей квадратной скобки
+                const records = input.split(/(?=^\s*\d+\s*=>\s*\[)/m)
+                                     .map(e => e.trim())
+                                     .filter(e => e.length > 0);
+                const processRecord = (recordStr) => {
+                    // Извлекаем номер записи
+                    const headerMatch = recordStr.match(/^\s*(\d+)\s*=>\s*\[/);
+                    if (!headerMatch) return "Ошибка: неверный формат заголовка";
+                    const number = headerMatch[1].trim();
+                    
+                    // Извлекаем все строки (в том числе пустые) из кавычек
+                    const regex = /"([^"]*)"/g;
+                    let match;
+                    const lines = [];
+                    while ((match = regex.exec(recordStr)) !== null) {
+                        lines.push(match[1]);
+                    }
+                    
+                    // Обрабатываем строки в абзацы: пустая строка служит разделителем
+                    const paragraphs = [];
+                    let currentParagraph = "";
+                    lines.forEach(line => {
+                        if (line.trim() === "") {
+                            if (currentParagraph !== "") {
+                                paragraphs.push(currentParagraph);
+                                currentParagraph = "";
+                            }
+                        } else {
+                            currentParagraph += line;
+                        }
+                    });
+                    if (currentParagraph !== "") {
+                        paragraphs.push(currentParagraph);
+                    }
+                    
+                    // Если последний абзац начинается с "イラスト：", объединяем его с предыдущим
+                    if (paragraphs.length > 1 && paragraphs[paragraphs.length - 1].startsWith("イラスト：")) {
+                        paragraphs[paragraphs.length - 2] += "\n" + paragraphs[paragraphs.length - 1];
+                        paragraphs.pop();
+                    }
+                    
+                    // Собираем результат: номер, затем абзацы, разделённые двойным переводом строки
+                    const content = paragraphs.join("\n\n");
+                    return `${number}\n${content}`;
+                };
+
+                return records.map(record => processRecord(record)).join("\n\n");
+            }
+        };
+
+        // Элементы страницы и обработка событий
+        const inputEl = document.getElementById('input-data');
+        const outputEl = document.getElementById('output-content');
+        const copyBtn = document.getElementById('copy-btn');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        
+        let activeProcessor = 'jobchange';
+
+        inputEl.addEventListener('input', updateOutput);
+        copyBtn.addEventListener('click', copyOutput);
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeProcessor = btn.dataset.tab;
+                updateOutput();
+            });
+        });
+
+        function updateOutput() {
+            const inputData = inputEl.value;
+            outputEl.textContent = processors[activeProcessor](inputData);
+        }
+
+        function copyOutput() {
+            navigator.clipboard.writeText(outputEl.textContent)
+                .then(() => alert('Текст скопирован!'))
+                .catch(err => console.error('Ошибка копирования:', err));
+        }
+
+        // Инициализация
+        updateOutput();
+    </script>
+</body>
+</html>

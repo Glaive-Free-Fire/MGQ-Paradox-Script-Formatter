@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>RB_Script_AutoFormatter</title>
+    <style>
+        body { margin: 20px; font-family: Arial, sans-serif; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .lang-controls { text-align: center; margin-bottom: 20px; }
+        .lang-btn {
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #f0f0f0;
+        }
+        .lang-btn.active {
+            background: #fff;
+            border-bottom: 2px solid #000;
+        }
+        .container { display: flex; gap: 20px; margin-top: 20px; }
+        .editor, .output { flex: 1; }
+        textarea { width: 100%; height: 300px; padding: 10px; }
+        .output-content { 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            height: 300px; 
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .controls { 
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .length-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .length-btn {
+            padding: 5px 10px;
+            min-width: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>RB_Script_AutoFormatter</h1>
+    </div>
+
+    <!-- Кнопки выбора языка -->
+    <div class="lang-controls">
+        <button class="lang-btn active" id="btn-rus">RUS</button>
+        <button class="lang-btn" id="btn-jap">JAP</button>
+    </div>
+
+    <div class="container">
+        <div class="editor">
+            <h3>Ввод данных:</h3>
+            <textarea id="input-data" placeholder="Введите текст с описанием..."></textarea>
+        </div>
+        <div class="output">
+            <h3>Результат:</h3>
+            <div id="output-content" class="output-content"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="length-control">
+            <span>ДЛИНА СТРОКИ:</span>
+            <button class="length-btn" id="decrease-length">-</button>
+            <span id="current-length"></span>
+            <button class="length-btn" id="increase-length">+</button>
+        </div>
+        <button id="copy-btn">Копировать результат</button>
+    </div>
+
+	<script>
+		// Значения по умолчанию для каждого языка
+		let maxLineLengthRus = 39;
+		let maxLineLengthJap = 22;
+		// Текущий режим: "RUS" или "JAP" (по умолчанию RUS)
+		let currentMode = "RUS";
+		// Префиксы для строки с иллюстрацией
+		const illustrationPrefixRUS = "Иллюстрация:";
+		const illustrationPrefixJAP = "イラスト：";
+
+		// Возвращает текущую максимальную длину строки для выбранного языка
+		function getCurrentMaxLineLength() {
+			return currentMode === "JAP" ? maxLineLengthJap : maxLineLengthRus;
+		}
+
+		// Экранируем кавычки внутри строки
+		function escapeQuotes(str) {
+			return str.replace(/"/g, '\\"');
+		}
+
+		// Обрабатывает весь текст, содержащий несколько блоков.
+		// Блоки определяются строками, состоящими только из цифр.
+		function processText(text) {
+			let lines = text.split('\n');
+			let blocks = [];
+			let currentBlock = null;
+			for (let line of lines) {
+				if (line.trim().match(/^\d+$/)) { // новая метка блока
+					if (currentBlock) {
+						blocks.push(currentBlock);
+					}
+					currentBlock = { id: line.trim(), content: [] };
+				} else {
+					if (currentBlock) {
+						currentBlock.content.push(line);
+					}
+				}
+			}
+			if (currentBlock) {
+				blocks.push(currentBlock);
+			}
+			return blocks.map(block => processBlock(block)).join('\n');
+		}
+
+		// Функция для проверки строки на наличие символов нужного языка
+		function isLineInActiveLang(line) {
+			if (currentMode === "RUS") {
+				return /[А-Яа-яЁё]/.test(line);
+			} else if (currentMode === "JAP") {
+				return /[\u3040-\u30FF\u4E00-\u9FBF]/.test(line);
+			}
+			return false;
+		}
+
+		// Обрабатывает отдельный блок.
+		// Каждая строка обрабатывается отдельно, а пустые строки добавляются только один раз.
+		function processBlock(block) {
+			let outputLines = [];
+			let illustrationLine = "";
+			
+			// Функция для добавления строки в outputLines, избегая дублирования пустых строк
+			function addLine(line) {
+				if (line === "") {
+					if (outputLines.length === 0 || outputLines[outputLines.length - 1] !== "") {
+						outputLines.push("");
+					}
+				} else {
+					outputLines.push(line);
+				}
+			}
+			
+			block.content.forEach(line => {
+				// Если строка содержит только пробелы – считаем её пустой
+				if (line.trim() === "") {
+					addLine("");
+					return;
+				}
+				// Если строка содержит иллюстрацию – сохраняем её отдельно
+				if (line.trim().match(/^Иллюстрация[:：]/)) {
+					illustrationLine = line.trim();
+					return;
+				}
+				// Если строка соответствует активному языку, обрабатываем её
+				if (isLineInActiveLang(line)) {
+					let splitted = splitIntoLines(line, getCurrentMaxLineLength());
+					splitted.forEach(subLine => addLine(subLine));
+				}
+			});
+			
+			// Обработка иллюстрации, если она есть
+			if (illustrationLine) {
+				illustrationLine = illustrationLine.replace(/^Иллюстрация[:：]\s*/, "");
+				if (currentMode === "JAP") {
+					illustrationLine = illustrationPrefixJAP + illustrationLine;
+				} else {
+					illustrationLine = illustrationPrefixRUS + " " + illustrationLine;
+				}
+				addLine(""); // добавляем разделитель, если его ещё нет
+				addLine(illustrationLine);
+			}
+			
+			let formatted = outputLines.map(line => '  "' + escapeQuotes(line) + '",').join('\n');
+			return `${block.id} => [\n${formatted}\n],`;
+		}
+
+		// Разбивка текста на строки с учётом максимальной длины.
+		// Для JAP – по символам, для RUS – по словам.
+		function splitIntoLines(text, maxLen) {
+			if (currentMode === "JAP") {
+				let lines = [];
+				for (let i = 0; i < text.length; i += maxLen) {
+					lines.push(text.substr(i, maxLen));
+				}
+				return lines;
+			} else {
+				const words = text.replace(/\n/g, ' ').split(' ').filter(Boolean);
+				let lines = [];
+				let currentLine = '';
+				words.forEach(word => {
+					if ((currentLine.length ? currentLine.length + 1 : 0) + word.length > maxLen) {
+						lines.push(currentLine);
+						currentLine = word;
+					} else {
+						currentLine += (currentLine ? ' ' : '') + word;
+					}
+				});
+				if (currentLine) lines.push(currentLine);
+				return lines;
+			}
+		}
+
+		// Обновляет отображение текущей длины строки для выбранного языка
+		function updateLengthDisplay() {
+			document.getElementById('current-length').textContent = getCurrentMaxLineLength();
+		}
+
+		// Элементы управления
+		const inputEl = document.getElementById('input-data');
+		const outputEl = document.getElementById('output-content');
+		const btnRus = document.getElementById('btn-rus');
+		const btnJap = document.getElementById('btn-jap');
+
+		function updateOutput() {
+			updateLengthDisplay();
+			const inputText = inputEl.value;
+			if (!inputText.trim()) {
+				outputEl.textContent = '';
+				return;
+			}
+			try {
+				outputEl.textContent = processText(inputText);
+			} catch (e) {
+				outputEl.textContent = 'Ошибка форматирования';
+			}
+		}
+
+		function adjustLength(delta) {
+			if (currentMode === "JAP") {
+				maxLineLengthJap = Math.max(10, maxLineLengthJap + delta);
+			} else {
+				maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
+			}
+			updateLengthDisplay();
+			updateOutput();
+		}
+
+		// Обработчики кнопок выбора языка
+		btnRus.addEventListener('click', () => {
+			currentMode = "RUS";
+			btnRus.classList.add('active');
+			btnJap.classList.remove('active');
+			updateOutput();
+		});
+		btnJap.addEventListener('click', () => {
+			currentMode = "JAP";
+			btnJap.classList.add('active');
+			btnRus.classList.remove('active');
+			updateOutput();
+		});
+
+		inputEl.addEventListener('input', updateOutput);
+		document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
+		document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
+		document.getElementById('copy-btn').addEventListener('click', () => {
+			navigator.clipboard.writeText(outputEl.textContent)
+				.then(() => alert('Текст скопирован!'))
+				.catch(err => console.error('Ошибка копирования:', err));
+		});
+
+		// Инициализация
+		updateOutput();
+
+	</script>
+
+</body>
+</html>
