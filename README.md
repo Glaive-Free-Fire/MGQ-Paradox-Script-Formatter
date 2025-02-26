@@ -63,8 +63,6 @@
 Часть1
 Часть2
 
-Copy
-
 ### Упаковка (`Script_for_packing.html`):
 **Ввод (RUS):**
 456
