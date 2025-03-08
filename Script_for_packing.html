@@ -148,8 +148,8 @@
   inputEl.addEventListener('input', updateOutput);
 
   // Обработчик кнопок изменения длины строки (единая версия для всех режимов)
-  document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
-  document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
+  document.getElementById('decrease-length').addEventListener('click', decreaseLength);
+  document.getElementById('increase-length').addEventListener('click', increaseLength);
   document.getElementById('copy-btn').addEventListener('click', () => {
     navigator.clipboard.writeText(document.getElementById('output-content').textContent)
       .then(() => alert('Текст скопирован!'))
@@ -227,6 +227,12 @@ function generateErrorLog() {
   document.addEventListener("DOMContentLoaded", function() {
       initEventListeners();
       updateOutput();
+  });
+
+  // Call this at page load
+  document.addEventListener('DOMContentLoaded', function() {
+      setupEventListeners();
+      console.log("Initial setup complete");
   });
 
   // Остальной код (обработка блоков, изменение длины строки, форматирование и т.д.) остается без изменений.
@@ -391,233 +397,305 @@ function generateErrorLog() {
 
   // Функция обработки JobChange
   function processJobChangeText(text) {
-      try {
-          // Parse input into blocks
-          let lines = text.split('\n');
-          let blocks = [];
-          let currentBlock = null;
-          
-          for (let line of lines) {
-              if (line.trim().match(/^\d+\s*#/)) {
-                  if (currentBlock) blocks.push(currentBlock);
-                  currentBlock = { 
-                      header: line.trim(), 
-                      description: [],
-                      equipment: []
-                  };
-              } else if (currentBlock) {
-                  // Check if this is an equipment/skills/abilities line
-                  if (line.trim().startsWith('Экипировка:') || 
-                      line.trim().startsWith('Навыки:') || 
-                      line.trim().startsWith('Способности:')) {
-                      currentBlock.equipment.push(line.trim());
-                  } else if (currentBlock.equipment.length > 0) {
-                      // If we've already started equipment section, keep adding to it
-                      currentBlock.equipment.push(line.trim());
-                  } else {
-                      // Otherwise, it's part of the description
-                      currentBlock.description.push(line.trim());
-                  }
-              }
-          }
-          
+    try {
+      // Parse input into blocks
+      let lines = text.split('\n');
+      let blocks = [];
+      let currentBlock = null;
+      
+      for (let line of lines) {
+        if (line.trim().match(/^\d+\s*#/)) {
           if (currentBlock) blocks.push(currentBlock);
+          currentBlock = { 
+            header: line.trim(), 
+            description: [],
+            equipment: [],
+            skills: [],
+            abilities: []
+          };
+        } else if (currentBlock) {
+          // Add line to appropriate section based on content
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
           
-          if (blocks.length === 0) return ""; // No blocks found
-          
-          let result = "";
-          blocks.forEach(block => {
-              // Extract ID and title from header
-              let headerParts = block.header.split('#');
-              let id = headerParts[0].trim();
-              let title = headerParts.length > 1 ? '# ' + headerParts[1].trim() : '';
-              
-              // Format description
-              let descriptionText = block.description.join(' ');
-              let descriptionLines = wrapText(descriptionText, maxLineLengthJobChangeVar, currentMode);
-              
-              // Process equipment/skills/abilities lines
-              let equipmentLines = [];
-              
-              // Group by categories
-              let categoryGroups = {};
-              let currentCategory = null;
-              
-              // First, group lines by category
-              for (let line of block.equipment) {
-                  if (line.startsWith('Экипировка:') || 
-                      line.startsWith('Навыки:') || 
-                      line.startsWith('Способности:')) {
-                      
-                      currentCategory = line.split(':')[0] + ':';
-                      categoryGroups[currentCategory] = line.substring(currentCategory.length).trim();
-                  } else if (currentCategory) {
-                      categoryGroups[currentCategory] += ' ' + line.trim();
-                  }
-              }
-              
-              // Format each category
-              for (let category in categoryGroups) {
-                  let items = categoryGroups[category].split('　').filter(Boolean);
-                  let currentLine = category + " ";
-                  const indent = "			   "; // Standard indentation
-                  
-                  for (let item of items) {
-                      if ((currentLine.length + item.length + 1) <= maxLineLengthJobChangeVar) {
-                          currentLine += item + "　";
-                      } else {
-                          // Remove trailing wide space
-                          if (currentLine.endsWith("　")) {
-                              currentLine = currentLine.slice(0, -1);
-                          }
-                          equipmentLines.push(currentLine);
-                          currentLine = indent + item + "　";
-                      }
-                  }
-                  
-                  // Add the last line for this category
-                  if (currentLine !== category + " ") {
-                      if (currentLine.endsWith("　")) {
-                          currentLine = currentLine.slice(0, -1);
-                      }
-                      equipmentLines.push(currentLine);
-                  }
-              }
-              
-              // Build result with correct structure and SAVE marker
-              result += `${id} => ${title}\n  [[\n`;
-              
-              // Description section
-              descriptionLines.forEach(line => {
-                  result += `    "${escapeQuotes(line)}",\n`;
-              });
-              
-              // Add SAVE marker instead of ],[ section separator
-              result += "SAVE\n";
-              
-              // Equipment section
-              equipmentLines.forEach(line => {
-                  result += `    "${escapeQuotes(line)}",\n`;
-              });
-              
-              result += "  ]],\n";
-          });
-          
-          return result;
-      } catch (e) {
-          console.error("Error in processJobChangeText:", e);
-          throw e;
+          if (trimmedLine.startsWith("Экипировка:")) {
+            currentBlock.equipment.push(trimmedLine);
+          } else if (trimmedLine.startsWith("Навыки:")) {
+            currentBlock.skills.push(trimmedLine);
+          } else if (trimmedLine.startsWith("Способности:")) {
+            currentBlock.abilities.push(trimmedLine);
+          } else if (currentBlock.abilities.length > 0) {
+            // Continuation of abilities section
+            currentBlock.abilities.push(trimmedLine);
+          } else if (currentBlock.skills.length > 0) {
+            // Continuation of skills section
+            currentBlock.skills.push(trimmedLine);
+          } else if (currentBlock.equipment.length > 0) {
+            // Continuation of equipment section
+            currentBlock.equipment.push(trimmedLine);
+          } else {
+            // This is part of the description
+            currentBlock.description.push(trimmedLine);
+          }
+        }
       }
+      
+      if (currentBlock) blocks.push(currentBlock);
+      
+      let result = "";
+      blocks.forEach(block => {
+        // Skip blocks without Russian characters if in RUS mode
+        let blockText = block.header + "\n" + 
+                       block.description.join("\n") + "\n" +
+                       block.equipment.join("\n") + "\n" +
+                       block.skills.join("\n") + "\n" +
+                       block.abilities.join("\n");
+                       
+        if (currentMode === "RUS" && !/[А-Яа-яЁё]/.test(blockText)) return;
+        if (currentMode === "JAP" && !/[\u3040-\u30FF\u4E00-\u9FBF]/.test(blockText)) return;
+        
+        // Extract ID and title
+        let headerParts = block.header.split('#');
+        let id = headerParts[0].trim();
+        let title = headerParts.length > 1 ? '# ' + headerParts[1].trim() : '';
+        
+        // Format description
+        let formattedDescription = [];
+        if (block.description.length > 0) {
+          let descText = block.description.join(' ');
+          formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
+        }
+        
+        // Format equipment, skills and abilities
+        let formattedEquipment = formatCategory("Экипировка:", block.equipment, maxLineLengthJobChangeVar);
+        let formattedSkills = formatCategory("Навыки:", block.skills, maxLineLengthJobChangeVar);
+        let formattedAbilities = formatCategory("Способности:", block.abilities, maxLineLengthJobChangeVar);
+        
+        // Build result
+        result += `${id} => ${title}\n  [[\n`;
+        
+        // Description section
+        formattedDescription.forEach(line => {
+          result += `    "${escapeQuotes(line)}",\n`;
+        });
+        
+        // SAVE marker
+        result += "SAVE\n";
+        
+        // Equipment, skills and abilities sections
+        formattedEquipment.forEach(line => {
+          result += `    "${escapeQuotes(line)}",\n`;
+        });
+        
+        formattedSkills.forEach(line => {
+          result += `    "${escapeQuotes(line)}",\n`;
+        });
+        
+        formattedAbilities.forEach(line => {
+          result += `    "${escapeQuotes(line)}",\n`;
+        });
+        
+        result += "  ]],\n";
+      });
+      
+      return result;
+    } catch (e) {
+      console.error("Error in processJobChangeText:", e);
+      return "Error processing text: " + e.message;
+    }
   }
 
-  // Вспомогательная функция для форматирования категорий
-  function formatCategory(category, items, maxLineLength) {
-      const indent = "			   "; // Стандартный отступ для продолжения строк
-      let lines = [];
-      let currentLine = category + " ";
+  // New function to specifically handle equipment, skills, and abilities
+  function processEquipmentSection(equipmentLines, maxLineLength) {
+    try {
+      const categories = ["Экипировка:", "Навыки:", "Способность:"];
+      let result = [];
       
-      for (let item of items) {
-          if (!item.trim()) continue;
-          
+      // Group content by categories
+      let categoryContent = {};
+      let currentCategory = null;
+      
+      for (let i = 0; i < equipmentLines.length; i++) {
+        let line = equipmentLines[i].trim();
+        
+        // Check if this line starts a new category
+        let foundCategory = false;
+        for (let category of categories) {
+          // Check if line starts with a category OR contains a category after space/separator
+          if (line.startsWith(category)) {
+            // Line starts with a category
+            currentCategory = category;
+            categoryContent[currentCategory] = line.substring(category.length).trim();
+            foundCategory = true;
+            break;
+          } else if (line.includes(category)) {
+            // Line contains a category in the middle - split it
+            let parts = line.split(category);
+            
+            // Handle the first part (belongs to previous category)
+            if (currentCategory) {
+              categoryContent[currentCategory] += " " + parts[0].trim();
+            }
+            
+            // Set up the new category
+            currentCategory = category;
+            categoryContent[currentCategory] = parts[1].trim();
+            foundCategory = true;
+            break;
+          }
+        }
+        
+        if (!foundCategory && currentCategory) {
+          categoryContent[currentCategory] += " " + line;
+        }
+      }
+      
+      // Process each category
+      for (let category of categories) {
+        if (!categoryContent[category]) continue;
+        
+        let itemsText = categoryContent[category];
+        // Split by wide spaces
+        let items = itemsText.split('　').filter(Boolean);
+        
+        let currentLine = category;
+        const indent = "			   "; // Standard indentation
+        
+        // First item gets a space after category name
+        if (items.length > 0) {
+          currentLine += " " + items[0] + "　";
+          items = items.slice(1);
+        }
+        
+        for (let item of items) {
           if ((currentLine.length + item.length + 1) <= maxLineLength) {
-              currentLine += item + "　";
+            currentLine += item + "　";
           } else {
-              // Удаляем завершающий широкий пробел
-              if (currentLine.endsWith("　")) {
-                  currentLine = currentLine.slice(0, -1);
-              }
-              lines.push(currentLine);
-              currentLine = indent + item + "　";
-          }
-      }
-      
-      // Добавляем последнюю строку, удаляя завершающий широкий пробел
-      if (currentLine !== category + " " && currentLine !== indent) {
-          if (currentLine.endsWith("　")) {
+            // Remove trailing wide space
+            if (currentLine.endsWith("　")) {
               currentLine = currentLine.slice(0, -1);
+            }
+            result.push(currentLine);
+            currentLine = indent + item + "　";
           }
-          lines.push(currentLine);
+        }
+        
+        // Add the last line
+        if (currentLine !== category && currentLine !== indent) {
+          if (currentLine.endsWith("　")) {
+            currentLine = currentLine.slice(0, -1);
+          }
+          result.push(currentLine);
+        }
       }
       
-      return lines;
+      return result;
+    } catch (e) {
+      console.error("Error in processEquipmentSection:", e);
+      return equipmentLines; // Return original lines as fallback
+    }
   }
+
+  // Improved function to format specific categories
+  function formatCategory(categoryName, lines, maxLineLength) {
+    try {
+      if (!lines || lines.length === 0) return [];
+      
+      const indent = "			   "; // Standard indentation
+      let result = [];
+      let items = [];
+      
+      // Extract items from all lines
+      lines.forEach(line => {
+        let content = line.trim();
+        if (content.startsWith(categoryName)) {
+          content = content.substring(categoryName.length).trim();
+        }
+        
+        // Split by wide space and add to items
+        content.split('　').filter(Boolean).forEach(item => {
+          items.push(item);
+        });
+      });
+      
+      if (items.length === 0) {
+        // If there are no items but we have lines, just add "Нет" for abilities
+        if (categoryName === "Способности:" && lines[0].trim() === "Способности: Нет") {
+          return ["Способности: Нет"];
+        }
+        return [];
+      }
+      
+      // Start with category name
+      let currentLine = categoryName + " " + items[0];
+      let lineIndex = 1;
+      
+      // Process remaining items
+      while (lineIndex < items.length) {
+        const item = items[lineIndex];
+        
+        // Check if adding this item would exceed the line length
+        if ((currentLine.length + 1 + item.length + 1) <= maxLineLength) {
+          currentLine += "　" + item;
+        } else {
+          // Current line is full, add it to results
+          result.push(currentLine);
+          currentLine = indent + item;
+        }
+        
+        lineIndex++;
+      }
+      
+      // Add the last line if not empty
+      if (currentLine && currentLine !== (categoryName + " ") && currentLine !== indent) {
+        result.push(currentLine);
+      }
+      
+      return result;
+    } catch (e) {
+      console.error("Error in formatCategory:", e);
+      return [categoryName + " Error"];
+    }
+  }
+
+
 
 
   // Функция wrapText (перенос строк)
   function wrapText(text, maxLen, lang) {
-      try {
-          if (lang === "JAP") {
-              // Japanese text: break by characters
-              let lines = [];
-              for (let i = 0; i < text.length; i += maxLen) {
-                  lines.push(text.substr(i, maxLen));
-              }
-              return lines;
+    try {
+      if (lang === "JAP") {
+        // Japanese text: break by characters
+        let lines = [];
+        for (let i = 0; i < text.length; i += maxLen) {
+          lines.push(text.substr(i, maxLen));
+        }
+        return lines;
+      } else {
+        // Russian text processing
+        const words = text.split(' ');
+        let lines = [];
+        let currentLine = '';
+        
+        for (let word of words) {
+          if ((currentLine.length ? currentLine.length + 1 : 0) + word.length <= maxLen) {
+            currentLine += (currentLine ? ' ' : '') + word;
           } else {
-              // Russian text: handle categories specifically
-              const categories = ["Экипировка:", "Навыки:", "Способности:"];
-              
-              // Check if this is a category paragraph
-              let isCategory = false;
-              let categoryName = "";
-              
-              for (let cat of categories) {
-                  if (text.startsWith(cat)) {
-                      isCategory = true;
-                      categoryName = cat;
-                      break;
-                  }
-              }
-              
-              if (isCategory) {
-                  // This is a category paragraph - special handling
-                  let lines = [];
-                  const indent = "			   "; // Standard indentation
-                  
-                  // Extract items after the category
-                  let items = text.substring(categoryName.length).trim().split('　').filter(Boolean);
-                  let currentLine = categoryName;
-                  
-                  for (let item of items) {
-                      if ((currentLine.length + 1 + item.length + 1) <= maxLen) {
-                          currentLine += (currentLine === categoryName ? " " : "　") + item;
-                      } else {
-                          lines.push(currentLine);
-                          currentLine = indent + item;
-                      }
-                  }
-                  
-                  if (currentLine !== categoryName && currentLine !== indent) {
-                      lines.push(currentLine);
-                  }
-                  
-                  return lines;
-              } else {
-                  // Regular text paragraph - break by words
-                  let words = text.split(' ');
-                  let lines = [];
-                  let currentLine = '';
-                  
-                  for (let word of words) {
-                      if ((currentLine.length ? currentLine.length + 1 : 0) + word.length <= maxLen) {
-                          currentLine += (currentLine ? ' ' : '') + word;
-                      } else {
-                          lines.push(currentLine);
-                          currentLine = word;
-                      }
-                  }
-                  
-                  if (currentLine) {
-                      lines.push(currentLine);
-                  }
-                  
-                  return lines;
-              }
+            lines.push(currentLine);
+            currentLine = word;
           }
-      } catch (e) {
-          console.error("Error in wrapText:", e);
-          return [text]; // Return original text as fallback
+        }
+        
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        
+        return lines;
       }
+    } catch (e) {
+      console.error("Error in wrapText:", e);
+      return [text]; // Return original text as fallback
+    }
   }
 
     
@@ -787,24 +865,67 @@ function generateErrorLog() {
       }
   }
 
-  // Изменение длины строки (и сохранение формата)
-  function adjustLength(delta) {
-    if (currentTab === "jobchange") {
-      maxLineLengthJobChangeVar = Math.max(10, maxLineLengthJobChangeVar + delta);
-    } else if (currentMode === "JAP") {
-      maxLineLengthJap = Math.max(10, maxLineLengthJap + delta);
-    } else {
-      maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
-    }
-
-    // Если формат уже исправлен, переформатируем с учётом исправлений
-    if (isFormatted) fixFormatting();
-    updateOutput();
+  function decreaseLength() {
+      adjustLength(-1);
   }
 
-  // Обработчики кнопок
-  document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
-  document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
+  function increaseLength() {
+      adjustLength(1);
+  }
+
+  // Изменение длины строки (и сохранение формата)
+  function adjustLength(delta) {
+      console.log("Adjusting length with delta:", delta); // Debugging
+      
+      // Get current value before adjustment
+      let oldValue;
+      if (currentTab === "jobchange") {
+          oldValue = maxLineLengthJobChangeVar;
+          maxLineLengthJobChangeVar = Math.max(10, maxLineLengthJobChangeVar + delta);
+          console.log(`JobChange line length: ${oldValue} → ${maxLineLengthJobChangeVar}`);
+      } else if (currentMode === "JAP") {
+          oldValue = maxLineLengthJap;
+          maxLineLengthJap = Math.max(10, maxLineLengthJap + delta);
+          console.log(`JAP line length: ${oldValue} → ${maxLineLengthJap}`);
+      } else {
+          oldValue = maxLineLengthRus;
+          maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
+          console.log(`RUS line length: ${oldValue} → ${maxLineLengthRus}`);
+      }
+      
+      // Update UI and output
+      updateLengthDisplay();
+      updateOutput();
+  }
+
+  // Clean implementation of handlers to prevent multiple triggers
+  function setupEventListeners() {
+      // First remove any existing listeners
+      const decreaseBtn = document.getElementById('decrease-length');
+      const increaseBtn = document.getElementById('increase-length');
+      
+      // Clone and replace buttons to remove all listeners
+      const newDecreaseBtn = decreaseBtn.cloneNode(true);
+      const newIncreaseBtn = increaseBtn.cloneNode(true);
+      
+      decreaseBtn.parentNode.replaceChild(newDecreaseBtn, decreaseBtn);
+      increaseBtn.parentNode.replaceChild(newIncreaseBtn, increaseBtn);
+      
+      // Add single listeners with direct delta values
+      newDecreaseBtn.addEventListener('click', function(e) {
+          e.stopPropagation(); // Prevent bubbling
+          adjustLength(-1);
+      });
+      
+      newIncreaseBtn.addEventListener('click', function(e) {
+          e.stopPropagation(); // Prevent bubbling
+          adjustLength(1);
+      });
+      
+      console.log("Event listeners set up");
+  }
+
+  // Event listeners
   document.getElementById('copy-btn').addEventListener('click', () => {
     navigator.clipboard.writeText(document.getElementById('output-content').textContent)
       .then(() => alert('Текст скопирован!'))
