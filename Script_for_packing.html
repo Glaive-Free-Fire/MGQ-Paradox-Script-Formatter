@@ -97,7 +97,6 @@
             <button class="length-btn" id="increase-length">+</button>
         </div>
         <button id="copy-btn">Копировать результат</button>
-        <button id="clear-btn">Исправить</button>
     </div>
 
 <script>
@@ -107,7 +106,6 @@
   let maxLineLengthRus = 39;
   let maxLineLengthJap = 22;
   let maxLineLengthJobChangeVar = 30; // Лимит строки для JobChange
-  let isFormatted = false; // Флаг исправленного форматирования
 
   // Префиксы для иллюстрации
   const illustrationPrefixRUS = "Иллюстрация:";
@@ -119,7 +117,6 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentTab = btn.getAttribute('data-mode');
-      isFormatted = false; // Сброс флага исправленного форматирования
       updateOutput();
     });
   });
@@ -148,7 +145,6 @@
   document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
   document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
   document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
-  document.getElementById('clear-btn').addEventListener('click', fixFormatting);
 
   // Функция копирования в буфер
   function copyToClipboard() {
@@ -166,13 +162,7 @@
     } else {
       maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
     }
-
-    // Если формат уже исправлен, корректируем перед обновлением
-    if (isFormatted) {
-      fixFormatting();
-    }
-
-    updateOutput(); // Вызываем обновление после исправления
+    updateOutput();
   }
 
   // Единая функция обновления отображения длины строки
@@ -203,7 +193,180 @@
     }
   }
 
-  // Функция обработки JobChange с прямым форматированием
+  // Function to detect input content that contains wide spaces
+  function hasWideSpaces(text) {
+    return text.includes('　');
+  }
+
+  // Improved split function that preserves wide spaces
+  function splitByWideSpaces(text) {
+    if (!text) return [];
+    
+    const segments = [];
+    let currentItem = '';
+    
+    // Handle edge case where text starts with wide space
+    if (text.startsWith('　')) {
+      text = text.substring(1);
+    }
+    
+    // Process each character
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      
+      if (char === '　') {
+        // Found a wide space
+        if (currentItem.trim()) {
+          segments.push(currentItem.trim());
+        }
+        currentItem = '';
+      } else {
+        // Regular character
+        currentItem += char;
+      }
+    }
+    
+    // Add the last item if there is one
+    if (currentItem.trim()) {
+      segments.push(currentItem.trim());
+    }
+    
+    return segments;
+  }
+
+  // Unified format function for equipment and skills
+  function formatWithWideSpaces(categoryName, inputLines, maxLineLength) {
+    const indent = "			   "; // Standard indentation  
+    const result = [];
+    
+    // Step 1: Extract raw content (removing category prefix)
+    let rawContent = "";
+    inputLines.forEach((line, index) => {
+      // Skip empty lines
+      if (!line.trim()) return;
+      
+      let content = line.trim();
+      
+      // First line usually contains the category name - remove it
+      if (index === 0) {
+        // Remove category prefix with multiple colon types
+        content = content.replace(new RegExp(`^${categoryName.replace(":", "")}[：:]\\s*`), "");
+      }
+      
+      // Add space between lines for normal processing
+      rawContent += (index > 0 && !content.startsWith('　') ? " " : "") + content;
+    });
+    
+    // Step 2: Properly parse items preserving wide spaces
+    let items = [];
+    
+    if (hasWideSpaces(rawContent)) {
+      // Wide spaces found - split accordingly
+      items = splitByWideSpaces(rawContent);
+    } else {
+      // Fallback to regular space splitting
+      items = rawContent.split(/\s+/).filter(item => item.trim());
+    }
+    
+    // Step 3: Format with line length constraints
+    let currentLine = `${categoryName} `;
+    let firstItem = true;
+    
+    items.forEach(item => {
+      // Skip empty items
+      if (!item || !item.trim()) return;
+      
+      const itemText = item.trim();
+      
+      if (firstItem) {
+        // First item always goes on the first line
+        currentLine += itemText;
+        firstItem = false;
+      } else if ((currentLine.length + 1 + itemText.length + 1) <= maxLineLength) {
+        // Item fits on the current line - add with wide space
+        currentLine += `　${itemText}`;
+      } else {
+        // Start a new line
+        result.push(currentLine);
+        currentLine = `${indent}${itemText}`;
+      }
+    });
+    
+    // Add the final line if not empty
+    if (currentLine && currentLine !== `${categoryName} `) {
+      result.push(currentLine);
+    }
+    
+    // Special case for empty content
+    if (result.length === 0 && categoryName === "Способности:") {
+      result.push(`${categoryName} Нет`);
+    }
+    
+    return result;
+  }
+
+  // Special function for abilities processing
+  function formatAbilitiesSection(inputLines, maxLineLength) {
+    const categoryName = "Способности:";
+    const indent = "			   ";
+    const result = [];
+    
+    // Process all input lines
+    let firstLineProcessed = false;
+    let currentLine = categoryName + " ";
+    
+    for (let i = 0; i < inputLines.length; i++) {
+      let line = inputLines[i].trim();
+      if (!line) continue;
+      
+      // Process first line to remove category name
+      if (!firstLineProcessed) {
+        line = line.replace(/^Способности[：:]\s*/, "");
+        firstLineProcessed = true;
+      }
+      
+      // Split this line by wide spaces
+      const parts = line.split('　');
+      
+      for (let j = 0; j < parts.length; j++) {
+        let part = parts[j].trim();
+        if (!part) continue;
+        
+        // For first item in the section
+        if (currentLine === categoryName + " ") {
+          currentLine += part;
+        } 
+        // If item fits on current line
+        else if ((currentLine.length + 1 + part.length + 1) <= maxLineLength) {
+          currentLine += "　" + part;
+        } 
+        // Start a new line if doesn't fit
+        else {
+          result.push(currentLine);
+          currentLine = indent + part;
+        }
+      }
+      
+      // Only add space between lines if needed
+      if (i < inputLines.length - 1 && !currentLine.endsWith(" ")) {
+        currentLine += " ";
+      }
+    }
+    
+    // Add final line if it has content
+    if (currentLine && currentLine !== categoryName + " ") {
+      result.push(currentLine);
+    }
+    
+    // Special case for "none"
+    if (result.length === 0) {
+      result.push(categoryName + " Нет");
+    }
+    
+    return result;
+  }
+
+  // Main processing function for JobChange mode
   function processJobChangeText(text) {
     try {
       // Parse input into blocks
@@ -226,7 +389,7 @@
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
           
-          // Check for Japanese-style colons (：) as well as regular ones
+          // Check for categories with both colon types
           if (trimmedLine.match(/^Экипировка[：:]/)) {
             currentBlock.equipment.push(trimmedLine);
           } else if (trimmedLine.match(/^　+/) && currentBlock.equipment.length > 0 && 
@@ -264,7 +427,7 @@
       
       let result = "";
       blocks.forEach(block => {
-        // Skip blocks without Russian characters if in RUS mode
+        // Skip blocks without matching language characters if needed
         let blockText = block.header + "\n" + 
                        block.description.join("\n") + "\n" +
                        block.equipment.join("\n") + "\n" +
@@ -283,13 +446,18 @@
         let formattedDescription = [];
         if (block.description.length > 0) {
           let descText = block.description.join(' ');
-          formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
+          formattedDescription = wrapText(descText, 
+                                          currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength(), 
+                                          currentMode);
         }
         
-        // Format equipment, skills and abilities
-        let formattedEquipment = formatCategoryWithJapaneseStyle(block.equipment, maxLineLengthJobChangeVar);
-        let formattedSkills = formatCategoryWithJapaneseStyle(block.skills, maxLineLengthJobChangeVar);
-        let formattedAbilities = formatCategoryWithJapaneseStyle(block.abilities, maxLineLengthJobChangeVar);
+        // Format all sections
+        const maxLen = currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength();
+        let formattedEquipment = formatWithWideSpaces("Экипировка:", block.equipment, maxLen);
+        let formattedSkills = formatWithWideSpaces("Навыки:", block.skills, maxLen);
+        
+        // Special processing for abilities
+        let formattedAbilities = formatAbilitiesSection(block.abilities, maxLen);
         
         // Build result with proper indentation
         result += `    ${id} => ${title}\n      [[\n`;
@@ -322,303 +490,6 @@
     } catch (e) {
       console.error("Error in processJobChangeText:", e);
       return "Error processing text: " + e.message;
-    }
-  }
-
-  // Corrected function to format abilities while preserving wide spaces
-  function formatCategoryWithJapaneseStyle(lines, maxLineLength) {
-    try {
-      if (!lines || lines.length === 0) return [];
-      
-      // Determine the category from the first line
-      const firstLine = lines[0].trim();
-      
-      // Check for both types of colons in category headers
-      let categoryMatch = firstLine.match(/^(Экипировка|Навыки|Способности|Способность)[：:]/);
-      
-      if (!categoryMatch) return []; // No category found
-      
-      let categoryName = categoryMatch[1];
-      if (categoryName === "Способность") {
-        categoryName = "Способности"; // Normalize to plural form
-      }
-      
-      // Detect if the input already has the category name with either colon style
-      const hasDuplicateCategory = firstLine.indexOf(categoryName + ":") === 0 || 
-                                 firstLine.indexOf(categoryName + "：") === 0;
-      
-      // Process based on category type
-      if (categoryName === "Экипировка") {
-        return formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory);
-      } 
-      else if (categoryName === "Навыки") {
-        return formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory);
-      }
-      else if (categoryName === "Способности") {
-        return formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory);
-      }
-      
-      return []; // Fallback
-    } catch (e) {
-      console.error("Error in formatCategoryWithJapaneseStyle:", e);
-      return ["Error processing category: " + e.message];
-    }
-  }
-
-  // Modified format functions to prevent category duplication
-  function formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory) {
-    const indent = "			   "; // Standard indentation
-    let result = [];
-    
-    // Collect all equipment text
-    let fullText = "";
-    
-    lines.forEach((line, index) => {
-      let content = line.trim();
-      if (index === 0) {
-        // Remove the category prefix from the first line
-        content = content.replace(/^(Экипировка[：:])\s*/, "");
-      }
-      fullText += " " + content;
-    });
-    
-    // Split by wide spaces correctly
-    let items = [];
-    if (fullText.includes('　')) {
-      // Use wide spaces as delimiters
-      const parts = fullText.split('　');
-      for (let i = 0; i < parts.length; i++) {
-        if (parts[i].trim()) {
-          items.push(parts[i].trim());
-        }
-      }
-    } else {
-      // Fallback to regular spaces
-      items = fullText.split(' ').filter(Boolean);
-    }
-    
-    if (items.length === 0) return [];
-    
-    // Process items
-    let currentLine = categoryName + ": " + items[0];
-    
-    for (let i = 1; i < items.length; i++) {
-      // Check if adding this item would exceed the line length
-      if ((currentLine.length + 1 + items[i].length + 1) <= maxLineLength) {
-        currentLine += "　" + items[i];
-      } else {
-        result.push(currentLine);
-        currentLine = indent + items[i];
-      }
-    }
-    
-    // Add the last line
-    if (currentLine && currentLine !== (categoryName + ": ")) {
-      result.push(currentLine);
-    }
-    
-    return result;
-  }
-
-  // Similar updates for formatSkills function
-  function formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory) {
-    const indent = "			   "; // Standard indentation
-    let result = [];
-    
-    // Collect all skill text
-    let fullText = "";
-    
-    lines.forEach((line, index) => {
-      let content = line.trim();
-      if (index === 0) {
-        // Remove the category prefix from the first line
-        content = content.replace(/^(Навыки[：:])\s*/, "");
-      }
-      fullText += " " + content;
-    });
-    
-    // Extract skills by preserving the original wide spaces
-    let skillItems = [];
-    
-    // Check if the text contains wide spaces
-    if (fullText.includes('　')) {
-      // Extract original wide-space separated items
-      const segmentsByWideSpace = fullText.split('　');
-      
-      for (let i = 0; i < segmentsByWideSpace.length; i++) {
-        const segment = segmentsByWideSpace[i].trim();
-        if (segment) {
-          skillItems.push(segment);
-        }
-      }
-    } else {
-      // Fallback to space splitting
-      skillItems = fullText.split(' ').filter(Boolean);
-    }
-    
-    // Process skill items
-    let currentLine = categoryName + ": " + skillItems[0];
-    
-    for (let i = 1; i < skillItems.length; i++) {
-      if ((currentLine.length + 1 + skillItems[i].length + 1) <= maxLineLength) {
-        // Add a wide space between skills
-        currentLine += "　" + skillItems[i];
-      } else {
-        result.push(currentLine);
-        currentLine = indent + skillItems[i];
-      }
-    }
-    
-    // Add the last line
-    if (currentLine && currentLine !== (categoryName + ": ")) {
-      result.push(currentLine);
-    }
-    
-    return result;
-  }
-
-  // Updated formatAbilities function
-  function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory) {
-    const indent = "			   "; // Standard indentation
-    let result = [];
-    
-    // Collect all ability text
-    let fullText = "";
-    
-    lines.forEach((line, index) => {
-      let content = line.trim();
-      if (index === 0) {
-        // Remove the category prefix from the first line
-        content = content.replace(/^(Способности[：:])\s*/, "");
-      }
-      // Add a space between lines to ensure proper separation
-      fullText += (index > 0 ? " " : "") + content;
-    });
-    
-    // Clean up the text
-    fullText = fullText.trim();
-    
-    // Properly split abilities by wide spaces
-    let abilities = [];
-    if (fullText.includes('　')) {
-      // Split by wide spaces first
-      const wideSpaceSplit = fullText.split('　');
-      
-      for (let part of wideSpaceSplit) {
-        if (part.trim()) {
-          abilities.push(part.trim());
-        }
-      }
-    } else {
-      // Look for ability patterns: percentages, effects, etc.
-      // Split by logical breaks and patterns
-      abilities = fullText.split(/\s+(?=[А-Я])/).filter(a => a.trim().length > 0);
-      
-      // If no clear separations found, treat as a single ability
-      if (abilities.length === 0) {
-        abilities = [fullText];
-      }
-    }
-    
-    // Remove any empty abilities
-    abilities = abilities.filter(ability => ability && ability.trim().length > 0);
-    
-    // Start with category name
-    let currentLine = categoryName + ": ";
-    let firstAbility = true;
-    
-    // Process each ability using the line length limit
-    for (let i = 0; i < abilities.length; i++) {
-      const ability = abilities[i].trim();
-      
-      // Skip empty abilities
-      if (!ability) continue;
-      
-      // Check if we can add this ability to the current line
-      if (firstAbility) {
-        // First ability always goes on the first line
-        currentLine += ability;
-        firstAbility = false;
-      } else if ((currentLine.length + 1 + ability.length) <= maxLineLength) {
-        // Add ability with proper separator
-        currentLine += "　" + ability;
-      } else {
-        // Line is full, add it to result and start a new line
-        result.push(currentLine);
-        currentLine = indent + ability;
-      }
-    }
-    
-    // Add the last line if it has content
-    if (currentLine && currentLine !== (categoryName + ": ")) {
-      result.push(currentLine);
-    } else if (abilities.length === 0 && currentLine === (categoryName + ": ")) {
-      // If we have no abilities, add "Нет" for "None"
-      result.push(categoryName + ": Нет");
-    }
-    
-    return result;
-  }
-
-  // Improved function to format specific categories
-  function formatCategory(categoryName, lines, maxLineLength) {
-    try {
-      if (!lines || lines.length === 0) return [];
-      
-      const indent = "			   "; // Standard indentation
-      let result = [];
-      let items = [];
-      
-      // Extract items from all lines
-      lines.forEach(line => {
-        let content = line.trim();
-        if (content.startsWith(categoryName)) {
-          content = content.substring(categoryName.length).trim();
-        }
-        
-        // Split by wide space and add to items
-        content.split('　').filter(Boolean).forEach(item => {
-          items.push(item);
-        });
-      });
-      
-      if (items.length === 0) {
-        // If there are no items but we have lines, just add "Нет" for abilities
-        if (categoryName === "Способности:" && lines[0].trim() === "Способности: Нет") {
-          return ["Способности: Нет"];
-        }
-        return [];
-      }
-      
-      // Start with category name
-      let currentLine = categoryName + " " + items[0];
-      let lineIndex = 1;
-      
-      // Process remaining items
-      while (lineIndex < items.length) {
-        const item = items[lineIndex];
-        
-        // Check if adding this item would exceed the line length
-        if ((currentLine.length + 1 + item.length + 1) <= maxLineLength) {
-          currentLine += "　" + item;
-        } else {
-          // Current line is full, add it to results
-          result.push(currentLine);
-          currentLine = indent + item;
-        }
-        
-        lineIndex++;
-      }
-      
-      // Add the last line if not empty
-      if (currentLine && currentLine !== (categoryName + " ") && currentLine !== indent) {
-        result.push(currentLine);
-      }
-      
-      return result;
-    } catch (e) {
-      console.error("Error in formatCategory:", e);
-      return [categoryName + " Error"];
     }
   }
 
@@ -770,118 +641,6 @@
   // Возвращает текущую максимальную длину строки для выбранного языка (для Library)
   function getCurrentMaxLineLength() {
     return currentMode === "JAP" ? maxLineLengthJap : maxLineLengthRus;
-  }
-
-  // Функция форматирования для вывода
-  function fixFormatting() {
-    try {
-      const outputEl = document.getElementById('output-content');
-      
-      // First, replace the SAVE marker
-      let content = outputEl.textContent.replace(/SAVE/g, '    ],\n    [');
-      
-      // Create a completely new formatted structure
-      let blocks = [];
-      let currentBlock = null;
-      
-      // Parse the content line by line
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        // Skip empty lines
-        if (!line) continue;
-        
-        // Check if this is a block header
-        if (line.match(/^\d+\s*=>\s*#/)) {
-          if (currentBlock) {
-            blocks.push(currentBlock);
-          }
-          currentBlock = {
-            header: line,
-            sections: []
-          };
-          
-          // Initialize first section
-          currentBlock.sections.push([]);
-        }
-        // Check if we're inside a block
-        else if (currentBlock) {
-          // Handle array markers
-          if (line === '[[') {
-            // Skip opening markers - we'll add them during formatting
-            continue;
-          }
-          else if (line === ']],') {
-            // Close the block - we'll add closing markers during formatting
-            blocks.push(currentBlock);
-            currentBlock = null;
-            continue;
-          }
-          else if (line === '[') {
-            // Start a new section within the block
-            currentBlock.sections.push([]);
-            continue;
-          }
-          else if (line === '],') {
-            // End the current section - we'll handle this during formatting
-            continue;
-          }
-          // Handle content lines (with or without quotes)
-          else {
-            // Clean up the content line
-            let contentLine = line;
-            if (contentLine.startsWith('"') && contentLine.endsWith('",')) {
-              contentLine = contentLine.substring(1, contentLine.length - 2);
-            }
-            
-            // Add to the current section
-            if (currentBlock.sections.length > 0) {
-              currentBlock.sections[currentBlock.sections.length - 1].push(contentLine);
-            }
-          }
-        }
-      }
-      
-      // Don't forget the last block if it exists
-      if (currentBlock) {
-        blocks.push(currentBlock);
-      }
-      
-      // Now rebuild the content with proper formatting
-      let formattedContent = [];
-      
-      blocks.forEach(block => {
-        // Add block header with 4 spaces
-        formattedContent.push('    ' + block.header);
-        
-        // Add double array opening with 6 spaces
-        formattedContent.push('      [[');
-        
-        // Process each section
-        block.sections.forEach((section, sectionIndex) => {
-          // Add content lines with 8 spaces
-          section.forEach(line => {
-            formattedContent.push('        "' + line + '",');
-          });
-          
-          // Close section with proper indentation
-          if (sectionIndex < block.sections.length - 1) {
-            formattedContent.push('    ],');
-            formattedContent.push('    [');
-          } else {
-            formattedContent.push('      ]],');
-          }
-        });
-      });
-      
-      // Update the output
-      outputEl.textContent = formattedContent.join('\n');
-      isFormatted = true;
-    } catch (e) {
-      console.error("Error in fixFormatting:", e);
-      alert("Error in fixFormatting: " + e.message);
-    }
   }
 
   // Инициализация
