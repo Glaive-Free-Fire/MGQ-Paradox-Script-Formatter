@@ -332,6 +332,8 @@
       
       // Determine the category from the first line
       const firstLine = lines[0].trim();
+      
+      // Check for both types of colons in category headers
       let categoryMatch = firstLine.match(/^(Экипировка|Навыки|Способности|Способность)[：:]/);
       
       if (!categoryMatch) return []; // No category found
@@ -341,15 +343,19 @@
         categoryName = "Способности"; // Normalize to plural form
       }
       
+      // Detect if the input already has the category name with either colon style
+      const hasDuplicateCategory = firstLine.indexOf(categoryName + ":") === 0 || 
+                                 firstLine.indexOf(categoryName + "：") === 0;
+      
       // Process based on category type
       if (categoryName === "Экипировка") {
-        return formatEquipment(categoryName, lines, maxLineLength);
+        return formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory);
       } 
       else if (categoryName === "Навыки") {
-        return formatSkills(categoryName, lines, maxLineLength);
+        return formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory);
       }
       else if (categoryName === "Способности") {
-        return formatAbilities(categoryName, lines, maxLineLength);
+        return formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory);
       }
       
       return []; // Fallback
@@ -359,8 +365,8 @@
     }
   }
 
-  // Format equipment preserving wide spaces
-  function formatEquipment(categoryName, lines, maxLineLength) {
+  // Modified format functions to prevent category duplication
+  function formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory) {
     const indent = "			   "; // Standard indentation
     let result = [];
     
@@ -370,8 +376,8 @@
     lines.forEach((line, index) => {
       let content = line.trim();
       if (index === 0) {
-        // First line starts with category name
-        content = content.substring(content.indexOf(':') + 1).trim();
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Экипировка[：:])\s*/, "");
       }
       fullText += " " + content;
     });
@@ -414,8 +420,8 @@
     return result;
   }
 
-  // Format skills preserving original spaces
-  function formatSkills(categoryName, lines, maxLineLength) {
+  // Similar updates for formatSkills function
+  function formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory) {
     const indent = "			   "; // Standard indentation
     let result = [];
     
@@ -425,8 +431,8 @@
     lines.forEach((line, index) => {
       let content = line.trim();
       if (index === 0) {
-        // First line starts with category name
-        content = content.substring(content.indexOf(':') + 1).trim();
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Навыки[：:])\s*/, "");
       }
       fullText += " " + content;
     });
@@ -442,8 +448,6 @@
       for (let i = 0; i < segmentsByWideSpace.length; i++) {
         const segment = segmentsByWideSpace[i].trim();
         if (segment) {
-          // Check if a segment contains multiple words (with regular spaces)
-          // These should be kept together as a single skill name
           skillItems.push(segment);
         }
       }
@@ -456,7 +460,6 @@
     let currentLine = categoryName + ": " + skillItems[0];
     
     for (let i = 1; i < skillItems.length; i++) {
-      // Preserve original spacing in skill names
       if ((currentLine.length + 1 + skillItems[i].length + 1) <= maxLineLength) {
         // Add a wide space between skills
         currentLine += "　" + skillItems[i];
@@ -474,9 +477,9 @@
     return result;
   }
 
-  // Format abilities handling complex patterns
-  function formatAbilities(categoryName, lines, maxLineLength) {
-    const indent = "			   "; // Use the same indentation as other categories
+  // Updated formatAbilities function
+  function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory) {
+    const indent = "			   "; // Standard indentation
     let result = [];
     
     // Collect all ability text
@@ -485,8 +488,8 @@
     lines.forEach((line, index) => {
       let content = line.trim();
       if (index === 0) {
-        // First line starts with category name
-        content = content.substring(content.indexOf(':') + 1).trim();
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Способности[：:])\s*/, "");
       }
       // Add a space between lines to ensure proper separation
       fullText += (index > 0 ? " " : "") + content;
@@ -508,34 +511,12 @@
       }
     } else {
       // Look for ability patterns: percentages, effects, etc.
-      // Common ability pattern with percentages
-      const percentPattern = /(\d+%\s+шанс\s+[\wА-Яа-яёЁ\-\s]+)(?=\d+%|\s*$)/g;
-      const matches = fullText.match(percentPattern);
+      // Split by logical breaks and patterns
+      abilities = fullText.split(/\s+(?=[А-Я])/).filter(a => a.trim().length > 0);
       
-      if (matches && matches.length > 0) {
-        abilities = matches.map(m => m.trim());
-        
-        // Check for abilities after the percentage-based ones
-        const lastMatch = matches[matches.length - 1];
-        const lastIndex = fullText.lastIndexOf(lastMatch) + lastMatch.length;
-        
-        if (lastIndex < fullText.length) {
-          const remainingText = fullText.substring(lastIndex).trim();
-          
-          // Split remaining abilities by logical breaks
-          const remainingAbilities = remainingText.split(/\s+(?=[А-Я])/)
-                                                .filter(a => a.trim().length > 0);
-          abilities = abilities.concat(remainingAbilities);
-        }
-      } else {
-        // If no percentage patterns, try other patterns
-        abilities = fullText.split(/\s+(?=[А-Я])/)
-                          .filter(a => a.trim().length > 0);
-        
-        // If no clear separations found, treat as a single ability
-        if (abilities.length === 0) {
-          abilities = [fullText];
-        }
+      // If no clear separations found, treat as a single ability
+      if (abilities.length === 0) {
+        abilities = [fullText];
       }
     }
     
