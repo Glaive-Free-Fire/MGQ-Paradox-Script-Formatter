@@ -43,7 +43,7 @@
             padding: 5px 10px;
             min-width: 30px;
         }
-		.tabs { 
+        .tabs { 
             margin-bottom: 10px;
             display: flex;
             gap: 10px;
@@ -98,9 +98,6 @@
         </div>
         <button id="copy-btn">Копировать результат</button>
         <button id="clear-btn">Исправить</button>
-        <button id="report-btn">Репорт</button>
-
-
     </div>
 
 <script>
@@ -147,217 +144,18 @@
   const inputEl = document.getElementById('input-data');
   inputEl.addEventListener('input', updateOutput);
 
-  // Обработчик кнопок изменения длины строки (единая версия для всех режимов)
-  document.getElementById('decrease-length').addEventListener('click', decreaseLength);
-  document.getElementById('increase-length').addEventListener('click', increaseLength);
-  document.getElementById('copy-btn').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('output-content').textContent)
-      .then(() => alert('Текст скопирован!'))
-      .catch(err => console.error('Ошибка копирования:', err));
-  });
+  // Обработчик кнопок изменения длины строки
+  document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
+  document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
+  document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
   document.getElementById('clear-btn').addEventListener('click', fixFormatting);
-
-// Глобальный массив для хранения логов ошибок
-let errorLogs = [];
-
-// Функция для форматирования текущей даты и времени
-function getCurrentTimestamp() {
-  const now = new Date();
-  return now.toLocaleString();
-}
-
-// Функция для записи ошибки в лог
-function logError(message, source, lineno, colno, error) {
-  const timestamp = getCurrentTimestamp();
-  const errorMessage = `[${timestamp}] Error: ${message} at ${source}:${lineno}:${colno}\n`;
-  const errorStack = error && error.stack ? error.stack + "\n" : "";
-  errorLogs.push(errorMessage + errorStack);
-  console.error(errorMessage, error);
-}
-
-// Глобальный обработчик ошибок
-window.onerror = function(message, source, lineno, colno, error) {
-  logError(message, source, lineno, colno, error);
-  return true;
-};
-
-// Функция для генерации лога и скачивания файла Log.txt
-function generateErrorLog() {
-  try {
-    if (errorLogs.length === 0) {
-      errorLogs.push(`[${getCurrentTimestamp()}] No errors reported.\n`);
-    }
-    const logText = errorLogs.join('\n');
-    const blob = new Blob([logText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Log.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    logError(e.message, "generateErrorLog", e.lineNumber, e.columnNumber, e);
-  }
-}
-
-  function initEventListeners() {
-      const addListener = (id, event, handler) => {
-          const el = document.getElementById(id);
-          if(el) el.addEventListener(event, handler);
-          else console.error(`Element #${id} not found`);
-      };
-
-      addListener('decrease-length', 'click', () => adjustLength(-1));
-      addListener('increase-length', 'click', () => adjustLength(1));
-      addListener('copy-btn', 'click', copyToClipboard);
-      addListener('clear-btn', 'click', cleanOutput);
-      addListener('report-btn', 'click', generateErrorLog);
-  }
 
   // Функция копирования в буфер
   function copyToClipboard() {
-      navigator.clipboard.writeText(document.getElementById('output-content').textContent)
-          .then(() => alert('Текст скопирован!'))
-          .catch(err => console.error('Ошибка копирования:', err));
+    navigator.clipboard.writeText(document.getElementById('output-content').textContent)
+      .then(() => alert('Текст скопирован!'))
+      .catch(err => console.error('Ошибка копирования:', err));
   }
-
-  // Привязываем обработчик для кнопки "Репорт" после загрузки DOM
-  document.addEventListener("DOMContentLoaded", function() {
-      initEventListeners();
-      updateOutput();
-  });
-
-  // Call this at page load
-  document.addEventListener('DOMContentLoaded', function() {
-      setupEventListeners();
-      console.log("Initial setup complete");
-  });
-
-  // Остальной код (обработка блоков, изменение длины строки, форматирование и т.д.) остается без изменений.
-  // Пример: функция cleanOutput обёрнута в try/catch для логирования ошибок
-
-  function cleanOutput() {
-      const outputEl = document.getElementById('output-content');
-      try {
-          let content = outputEl.textContent
-              .replace(/"\s*],/g, '"\n  ],')
-              .replace(/\],\n\s+\[/g, '],\n  [')
-              .replace(/(\d+ => \[)\n\s+\[/g, '$1\n  [[')
-              .replace(/(\s{2}\][^\n]*)\n\s+(\][^\n]*)/g, '$1$2')
-              .replace(/\[\[\n\s+\[/g, '[[\n  [')
-              .replace(/"\s+\[/g, '", [');
-
-          outputEl.textContent = content
-              .split('\n')
-              .map(line => line.trim().startsWith('"') 
-                  ? line.replace(/^\s+/, '    ') 
-                  : line
-              )
-              .join('\n');
-          
-          isFormatted = true;
-      } catch(e) {
-          logError(e.message, "cleanOutput", e.lineNumber, e.columnNumber, e);
-      }
-  }
-
-
-  // Пример использования: оборачиваем функцию очистки вывода в try/catch
-  function cleanOutput() {
-    try {
-      const outputEl = document.getElementById('output-content');
-      let lines = outputEl.textContent.split('\n');
-      let newLines = [];
-      let inBlock = false;
-      let prevLine = '';
-      
-      // Track categories and indentation states
-      const categories = ["Экипировка:", "Навыки:", "Способности:"];
-      let currentCategory = "";
-      const indent = "			   "; // Standard indentation for continuation lines
-      
-      for(let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmedLine = line.trim();
-        
-        // Check if we're at the start or end of a block
-        if(trimmedLine === '[[') {
-          newLines.push('      [[');
-          inBlock = true;
-          continue;
-        }
-        
-        if(trimmedLine === ']],') {
-          if(prevLine.trim() === '],') {
-            newLines.pop(); // Remove the second-to-last line before ]],
-          }
-          newLines.push('      ]],');
-          inBlock = false;
-          currentCategory = "";
-          continue;
-        }
-        
-        if(trimmedLine === '[') {
-          newLines.push('    [');
-          continue;
-        }
-        
-        if(trimmedLine === '],') {
-          newLines.push('    ],');
-          continue;
-        }
-        
-        if(inBlock) prevLine = line;
-        
-        // Check if line contains a category
-        let isCategoryLine = false;
-        for(let category of categories) {
-          if(trimmedLine.startsWith(category)) {
-            currentCategory = category;
-            isCategoryLine = true;
-            break;
-          }
-        }
-        
-        // Process the line based on content type
-        if(isCategoryLine) {
-          // This is a category header line - clean it but keep as is
-          let cleanedLine = trimmedLine.replace(/\s*　\s*/g, '　');
-          newLines.push('        "' + cleanedLine + '",');
-        } else if(currentCategory && !isCategoryLine) {
-          // This is a continuation of a category - apply indentation
-          
-          // If line starts with wide space or has indentation already
-          let content = trimmedLine;
-          if(content.startsWith('　')) {
-            content = content.substring(1);
-          }
-          
-          // Clean spaces around wide spaces
-          content = content.replace(/\s*　\s*/g, '　');
-          
-          // Apply proper indentation
-          newLines.push('        "' + indent + content + '",');
-        } else if(trimmedLine.startsWith('"')) {
-          // Line already has quotes - check and add indentation
-          newLines.push('        ' + trimmedLine);
-        } else {
-          // Regular line - just clean it and add quotes + indentation
-          let cleanedLine = trimmedLine.replace(/\s*　\s*/g, '　');
-          newLines.push('        "' + cleanedLine + '",');
-        }
-      }
-      
-      outputEl.textContent = newLines.join('\n');
-      isFormatted = true;
-    } catch (e) {
-      console.error("Error in cleanOutput:", e);
-      alert("Error in cleanOutput: " + e.message);
-    }
-  }
-
 
   // Единая функция изменения длины строки, учитывающая текущую вкладку
   function adjustLength(delta) {
@@ -369,14 +167,13 @@ function generateErrorLog() {
       maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
     }
 
-  // Если формат уже исправлен, корректируем перед обновлением
+    // Если формат уже исправлен, корректируем перед обновлением
     if (isFormatted) {
       fixFormatting();
     }
 
     updateOutput(); // Вызываем обновление после исправления
   }
-
 
   // Единая функция обновления отображения длины строки
   function updateLengthDisplay() {
@@ -390,7 +187,6 @@ function generateErrorLog() {
   }
 
   // Единая функция обновления вывода
-  // Функция обновления вывода
   function updateOutput() {
     updateLengthDisplay();
     const inputText = document.getElementById('input-data').value;
@@ -403,208 +199,384 @@ function generateErrorLog() {
       document.getElementById('output-content').textContent = output;
     } catch (e) {
       document.getElementById('output-content').textContent = 'Ошибка форматирования';
+      console.error("Error in updateOutput:", e);
     }
   }
 
-  // Функция обработки JobChange
-function processJobChangeText(text) {
-  try {
-    // Parse input into blocks
-    let lines = text.split('\n');
-    let blocks = [];
-    let currentBlock = null;
-    
-    for (let line of lines) {
-      if (line.trim().match(/^\d+\s*#/)) {
-        if (currentBlock) blocks.push(currentBlock);
-        currentBlock = { 
-          header: line.trim(), 
-          description: [],
-          equipment: [],
-          skills: [],
-          abilities: []
-        };
-      } else if (currentBlock) {
-        // Add line to appropriate section based on content
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
-        
-        if (trimmedLine.startsWith("Экипировка:")) {
-          currentBlock.equipment.push(trimmedLine);
-        } else if (trimmedLine.startsWith("Навыки:")) {
-          currentBlock.skills.push(trimmedLine);
-        } else if (trimmedLine.startsWith("Способности:")) {
-          currentBlock.abilities.push(trimmedLine);
-        } else if (currentBlock.abilities.length > 0) {
-          // Continuation of abilities section
-          currentBlock.abilities.push(trimmedLine);
-        } else if (currentBlock.skills.length > 0) {
-          // Continuation of skills section
-          currentBlock.skills.push(trimmedLine);
-        } else if (currentBlock.equipment.length > 0) {
-          // Continuation of equipment section
-          currentBlock.equipment.push(trimmedLine);
-        } else {
-          // This is part of the description
-          currentBlock.description.push(trimmedLine);
-        }
-      }
-    }
-    
-    if (currentBlock) blocks.push(currentBlock);
-    
-    let result = "";
-    blocks.forEach(block => {
-      // Skip blocks without Russian characters if in RUS mode
-      let blockText = block.header + "\n" + 
-                     block.description.join("\n") + "\n" +
-                     block.equipment.join("\n") + "\n" +
-                     block.skills.join("\n") + "\n" +
-                     block.abilities.join("\n");
-                     
-      if (currentMode === "RUS" && !/[А-Яа-яЁё]/.test(blockText)) return;
-      if (currentMode === "JAP" && !/[\u3040-\u30FF\u4E00-\u9FBF]/.test(blockText)) return;
-      
-      // Extract ID and title
-      let headerParts = block.header.split('#');
-      let id = headerParts[0].trim();
-      let title = headerParts.length > 1 ? '# ' + headerParts[1].trim() : '';
-      
-      // Format description
-      let formattedDescription = [];
-      if (block.description.length > 0) {
-        let descText = block.description.join(' ');
-        formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
-      }
-      
-      // Format equipment, skills and abilities
-      let formattedEquipment = formatCategory("Экипировка:", block.equipment, maxLineLengthJobChangeVar);
-      let formattedSkills = formatCategory("Навыки:", block.skills, maxLineLengthJobChangeVar);
-      let formattedAbilities = formatCategory("Способности:", block.abilities, maxLineLengthJobChangeVar);
-      
-      // Build result with proper indentation
-      result += `    ${id} => ${title}\n      [[\n`;
-      
-      // Description section
-      formattedDescription.forEach(line => {
-        result += `        "${escapeQuotes(line)}",\n`;
-      });
-      
-      // Section separator
-      result += `    ],\n    [\n`;
-      
-      // Equipment, skills and abilities sections
-      formattedEquipment.forEach(line => {
-        result += `        "${escapeQuotes(line)}",\n`;
-      });
-      
-      formattedSkills.forEach(line => {
-        result += `        "${escapeQuotes(line)}",\n`;
-      });
-      
-      formattedAbilities.forEach(line => {
-        result += `        "${escapeQuotes(line)}",\n`;
-      });
-      
-      result += `      ]],\n`;
-    });
-    
-    return result;
-  } catch (e) {
-    console.error("Error in processJobChangeText:", e);
-    return "Error processing text: " + e.message;
-  }
-}
-
-  // New function to specifically handle equipment, skills, and abilities
-  function processEquipmentSection(equipmentLines, maxLineLength) {
+  // Функция обработки JobChange с прямым форматированием
+  function processJobChangeText(text) {
     try {
-      const categories = ["Экипировка:", "Навыки:", "Способность:"];
-      let result = [];
+      // Parse input into blocks
+      let lines = text.split('\n');
+      let blocks = [];
+      let currentBlock = null;
       
-      // Group content by categories
-      let categoryContent = {};
-      let currentCategory = null;
-      
-      for (let i = 0; i < equipmentLines.length; i++) {
-        let line = equipmentLines[i].trim();
-        
-        // Check if this line starts a new category
-        let foundCategory = false;
-        for (let category of categories) {
-          // Check if line starts with a category OR contains a category after space/separator
-          if (line.startsWith(category)) {
-            // Line starts with a category
-            currentCategory = category;
-            categoryContent[currentCategory] = line.substring(category.length).trim();
-            foundCategory = true;
-            break;
-          } else if (line.includes(category)) {
-            // Line contains a category in the middle - split it
-            let parts = line.split(category);
-            
-            // Handle the first part (belongs to previous category)
-            if (currentCategory) {
-              categoryContent[currentCategory] += " " + parts[0].trim();
-            }
-            
-            // Set up the new category
-            currentCategory = category;
-            categoryContent[currentCategory] = parts[1].trim();
-            foundCategory = true;
-            break;
-          }
-        }
-        
-        if (!foundCategory && currentCategory) {
-          categoryContent[currentCategory] += " " + line;
-        }
-      }
-      
-      // Process each category
-      for (let category of categories) {
-        if (!categoryContent[category]) continue;
-        
-        let itemsText = categoryContent[category];
-        // Split by wide spaces
-        let items = itemsText.split('　').filter(Boolean);
-        
-        let currentLine = category;
-        const indent = "			   "; // Standard indentation
-        
-        // First item gets a space after category name
-        if (items.length > 0) {
-          currentLine += " " + items[0] + "　";
-          items = items.slice(1);
-        }
-        
-        for (let item of items) {
-          if ((currentLine.length + item.length + 1) <= maxLineLength) {
-            currentLine += item + "　";
+      for (let line of lines) {
+        if (line.trim().match(/^\d+\s*#/)) {
+          if (currentBlock) blocks.push(currentBlock);
+          currentBlock = { 
+            header: line.trim(), 
+            description: [],
+            equipment: [],
+            skills: [],
+            abilities: []
+          };
+        } else if (currentBlock) {
+          // Add line to appropriate section based on content
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          // Check for Japanese-style colons (：) as well as regular ones
+          if (trimmedLine.match(/^Экипировка[：:]/)) {
+            currentBlock.equipment.push(trimmedLine);
+          } else if (trimmedLine.match(/^　+/) && currentBlock.equipment.length > 0 && 
+                    currentBlock.skills.length === 0 && currentBlock.abilities.length === 0) {
+            // Indented continuation of equipment
+            currentBlock.equipment.push(trimmedLine);
+          } else if (trimmedLine.match(/^Навыки[：:]/)) {
+            currentBlock.skills.push(trimmedLine);
+          } else if (trimmedLine.match(/^　+/) && currentBlock.skills.length > 0 && 
+                    currentBlock.abilities.length === 0) {
+            // Indented continuation of skills
+            currentBlock.skills.push(trimmedLine);
+          } else if (trimmedLine.match(/^Способности[：:]/i) || trimmedLine.match(/^Способность[：:]/i)) {
+            currentBlock.abilities.push(trimmedLine);
+          } else if (trimmedLine.match(/^　+/) && currentBlock.abilities.length > 0) {
+            // Indented continuation of abilities
+            currentBlock.abilities.push(trimmedLine);
+          } else if (currentBlock.abilities.length > 0) {
+            // Non-indented continuation of abilities section
+            currentBlock.abilities.push(trimmedLine);
+          } else if (currentBlock.skills.length > 0) {
+            // Non-indented continuation of skills section
+            currentBlock.skills.push(trimmedLine);
+          } else if (currentBlock.equipment.length > 0) {
+            // Non-indented continuation of equipment section
+            currentBlock.equipment.push(trimmedLine);
           } else {
-            // Remove trailing wide space
-            if (currentLine.endsWith("　")) {
-              currentLine = currentLine.slice(0, -1);
-            }
-            result.push(currentLine);
-            currentLine = indent + item + "　";
+            // This is part of the description
+            currentBlock.description.push(trimmedLine);
           }
-        }
-        
-        // Add the last line
-        if (currentLine !== category && currentLine !== indent) {
-          if (currentLine.endsWith("　")) {
-            currentLine = currentLine.slice(0, -1);
-          }
-          result.push(currentLine);
         }
       }
+      
+      if (currentBlock) blocks.push(currentBlock);
+      
+      let result = "";
+      blocks.forEach(block => {
+        // Skip blocks without Russian characters if in RUS mode
+        let blockText = block.header + "\n" + 
+                       block.description.join("\n") + "\n" +
+                       block.equipment.join("\n") + "\n" +
+                       block.skills.join("\n") + "\n" +
+                       block.abilities.join("\n");
+                       
+        if (currentMode === "RUS" && !/[А-Яа-яЁё]/.test(blockText)) return;
+        if (currentMode === "JAP" && !/[\u3040-\u30FF\u4E00-\u9FBF]/.test(blockText)) return;
+        
+        // Extract ID and title
+        let headerParts = block.header.split('#');
+        let id = headerParts[0].trim();
+        let title = headerParts.length > 1 ? '# ' + headerParts[1].trim() : '';
+        
+        // Format description
+        let formattedDescription = [];
+        if (block.description.length > 0) {
+          let descText = block.description.join(' ');
+          formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
+        }
+        
+        // Format equipment, skills and abilities
+        let formattedEquipment = formatCategoryWithJapaneseStyle(block.equipment, maxLineLengthJobChangeVar);
+        let formattedSkills = formatCategoryWithJapaneseStyle(block.skills, maxLineLengthJobChangeVar);
+        let formattedAbilities = formatCategoryWithJapaneseStyle(block.abilities, maxLineLengthJobChangeVar);
+        
+        // Build result with proper indentation
+        result += `    ${id} => ${title}\n      [[\n`;
+        
+        // Description section
+        formattedDescription.forEach(line => {
+          result += `        "${escapeQuotes(line)}",\n`;
+        });
+        
+        // Section separator
+        result += `    ],\n    [\n`;
+        
+        // Equipment, skills and abilities sections
+        formattedEquipment.forEach(line => {
+          result += `        "${escapeQuotes(line)}",\n`;
+        });
+        
+        formattedSkills.forEach(line => {
+          result += `        "${escapeQuotes(line)}",\n`;
+        });
+        
+        formattedAbilities.forEach(line => {
+          result += `        "${escapeQuotes(line)}",\n`;
+        });
+        
+        result += `      ]],\n`;
+      });
       
       return result;
     } catch (e) {
-      console.error("Error in processEquipmentSection:", e);
-      return equipmentLines; // Return original lines as fallback
+      console.error("Error in processJobChangeText:", e);
+      return "Error processing text: " + e.message;
     }
+  }
+
+  // Corrected function to format abilities while preserving wide spaces
+  function formatCategoryWithJapaneseStyle(lines, maxLineLength) {
+    try {
+      if (!lines || lines.length === 0) return [];
+      
+      // Determine the category from the first line
+      const firstLine = lines[0].trim();
+      let categoryMatch = firstLine.match(/^(Экипировка|Навыки|Способности|Способность)[：:]/);
+      
+      if (!categoryMatch) return []; // No category found
+      
+      let categoryName = categoryMatch[1];
+      if (categoryName === "Способность") {
+        categoryName = "Способности"; // Normalize to plural form
+      }
+      
+      // Process based on category type
+      if (categoryName === "Экипировка") {
+        return formatEquipment(categoryName, lines, maxLineLength);
+      } 
+      else if (categoryName === "Навыки") {
+        return formatSkills(categoryName, lines, maxLineLength);
+      }
+      else if (categoryName === "Способности") {
+        return formatAbilities(categoryName, lines, maxLineLength);
+      }
+      
+      return []; // Fallback
+    } catch (e) {
+      console.error("Error in formatCategoryWithJapaneseStyle:", e);
+      return ["Error processing category: " + e.message];
+    }
+  }
+
+  // Format equipment preserving wide spaces
+  function formatEquipment(categoryName, lines, maxLineLength) {
+    const indent = "			   "; // Standard indentation
+    let result = [];
+    
+    // Collect all equipment text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // First line starts with category name
+        content = content.substring(content.indexOf(':') + 1).trim();
+      }
+      fullText += " " + content;
+    });
+    
+    // Split by wide spaces correctly
+    let items = [];
+    if (fullText.includes('　')) {
+      // Use wide spaces as delimiters
+      const parts = fullText.split('　');
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].trim()) {
+          items.push(parts[i].trim());
+        }
+      }
+    } else {
+      // Fallback to regular spaces
+      items = fullText.split(' ').filter(Boolean);
+    }
+    
+    if (items.length === 0) return [];
+    
+    // Process items
+    let currentLine = categoryName + ": " + items[0];
+    
+    for (let i = 1; i < items.length; i++) {
+      // Check if adding this item would exceed the line length
+      if ((currentLine.length + 1 + items[i].length + 1) <= maxLineLength) {
+        currentLine += "　" + items[i];
+      } else {
+        result.push(currentLine);
+        currentLine = indent + items[i];
+      }
+    }
+    
+    // Add the last line
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    }
+    
+    return result;
+  }
+
+  // Format skills preserving original spaces
+  function formatSkills(categoryName, lines, maxLineLength) {
+    const indent = "			   "; // Standard indentation
+    let result = [];
+    
+    // Collect all skill text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // First line starts with category name
+        content = content.substring(content.indexOf(':') + 1).trim();
+      }
+      fullText += " " + content;
+    });
+    
+    // Extract skills by preserving the original wide spaces
+    let skillItems = [];
+    
+    // Check if the text contains wide spaces
+    if (fullText.includes('　')) {
+      // Extract original wide-space separated items
+      const segmentsByWideSpace = fullText.split('　');
+      
+      for (let i = 0; i < segmentsByWideSpace.length; i++) {
+        const segment = segmentsByWideSpace[i].trim();
+        if (segment) {
+          // Check if a segment contains multiple words (with regular spaces)
+          // These should be kept together as a single skill name
+          skillItems.push(segment);
+        }
+      }
+    } else {
+      // Fallback to space splitting
+      skillItems = fullText.split(' ').filter(Boolean);
+    }
+    
+    // Process skill items
+    let currentLine = categoryName + ": " + skillItems[0];
+    
+    for (let i = 1; i < skillItems.length; i++) {
+      // Preserve original spacing in skill names
+      if ((currentLine.length + 1 + skillItems[i].length + 1) <= maxLineLength) {
+        // Add a wide space between skills
+        currentLine += "　" + skillItems[i];
+      } else {
+        result.push(currentLine);
+        currentLine = indent + skillItems[i];
+      }
+    }
+    
+    // Add the last line
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    }
+    
+    return result;
+  }
+
+  // Format abilities handling complex patterns
+  function formatAbilities(categoryName, lines, maxLineLength) {
+    const indent = "			   "; // Use the same indentation as other categories
+    let result = [];
+    
+    // Collect all ability text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // First line starts with category name
+        content = content.substring(content.indexOf(':') + 1).trim();
+      }
+      // Add a space between lines to ensure proper separation
+      fullText += (index > 0 ? " " : "") + content;
+    });
+    
+    // Clean up the text
+    fullText = fullText.trim();
+    
+    // Properly split abilities by wide spaces
+    let abilities = [];
+    if (fullText.includes('　')) {
+      // Split by wide spaces first
+      const wideSpaceSplit = fullText.split('　');
+      
+      for (let part of wideSpaceSplit) {
+        if (part.trim()) {
+          abilities.push(part.trim());
+        }
+      }
+    } else {
+      // Look for ability patterns: percentages, effects, etc.
+      // Common ability pattern with percentages
+      const percentPattern = /(\d+%\s+шанс\s+[\wА-Яа-яёЁ\-\s]+)(?=\d+%|\s*$)/g;
+      const matches = fullText.match(percentPattern);
+      
+      if (matches && matches.length > 0) {
+        abilities = matches.map(m => m.trim());
+        
+        // Check for abilities after the percentage-based ones
+        const lastMatch = matches[matches.length - 1];
+        const lastIndex = fullText.lastIndexOf(lastMatch) + lastMatch.length;
+        
+        if (lastIndex < fullText.length) {
+          const remainingText = fullText.substring(lastIndex).trim();
+          
+          // Split remaining abilities by logical breaks
+          const remainingAbilities = remainingText.split(/\s+(?=[А-Я])/)
+                                                .filter(a => a.trim().length > 0);
+          abilities = abilities.concat(remainingAbilities);
+        }
+      } else {
+        // If no percentage patterns, try other patterns
+        abilities = fullText.split(/\s+(?=[А-Я])/)
+                          .filter(a => a.trim().length > 0);
+        
+        // If no clear separations found, treat as a single ability
+        if (abilities.length === 0) {
+          abilities = [fullText];
+        }
+      }
+    }
+    
+    // Remove any empty abilities
+    abilities = abilities.filter(ability => ability && ability.trim().length > 0);
+    
+    // Start with category name
+    let currentLine = categoryName + ": ";
+    let firstAbility = true;
+    
+    // Process each ability using the line length limit
+    for (let i = 0; i < abilities.length; i++) {
+      const ability = abilities[i].trim();
+      
+      // Skip empty abilities
+      if (!ability) continue;
+      
+      // Check if we can add this ability to the current line
+      if (firstAbility) {
+        // First ability always goes on the first line
+        currentLine += ability;
+        firstAbility = false;
+      } else if ((currentLine.length + 1 + ability.length) <= maxLineLength) {
+        // Add ability with proper separator
+        currentLine += "　" + ability;
+      } else {
+        // Line is full, add it to result and start a new line
+        result.push(currentLine);
+        currentLine = indent + ability;
+      }
+    }
+    
+    // Add the last line if it has content
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    } else if (abilities.length === 0 && currentLine === (categoryName + ": ")) {
+      // If we have no abilities, add "Нет" for "None"
+      result.push(categoryName + ": Нет");
+    }
+    
+    return result;
   }
 
   // Improved function to format specific categories
@@ -669,10 +641,7 @@ function processJobChangeText(text) {
     }
   }
 
-
-
-
-  // Функция wrapText (перенос строк)
+  // Process text one line at a time for better readability
   function wrapText(text, maxLen, lang) {
     try {
       if (lang === "JAP") {
@@ -709,14 +678,12 @@ function processJobChangeText(text) {
     }
   }
 
-    
-
   // Функция экранирования кавычек в строке
   function escapeQuotes(str) {
     return str.replace(/"/g, '\\"');
   }
 
-  // Функция обработки для вкладки Library (без изменений)
+  // Функция обработки для вкладки Library
   function processText(text) {
     let lines = text.split('\n');
     let blocks = [];
@@ -751,48 +718,47 @@ function processJobChangeText(text) {
 
   // Обрабатывает отдельный блок для Library
   function processBlock(block) {
-      let outputLines = [];
-      let illustrationLine = "";
-      
-      function addLine(line) {
-          if (line === "") {
-              if (outputLines.length === 0 || outputLines[outputLines.length - 1] !== "") {
-                  outputLines.push("");
-              }
-          } else {
-              outputLines.push(line);
-          }
+    let outputLines = [];
+    let illustrationLine = "";
+    
+    function addLine(line) {
+      if (line === "") {
+        if (outputLines.length === 0 || outputLines[outputLines.length - 1] !== "") {
+          outputLines.push("");
+        }
+      } else {
+        outputLines.push(line);
       }
-      
-      block.content.forEach(line => {
-          if (line.trim() === "") {
-              addLine("");
-              return;
-          }
-          if (line.trim().match(/^Иллюстрация[:：]/)) {
-              illustrationLine = line.trim();
-              return;
-          }
-          if (isLineInActiveLang(line)) {
-              let splitted = splitIntoLines(line, getCurrentMaxLineLength());
-              splitted.forEach(subLine => addLine(subLine));
-          }
-      });
-      
-      if (illustrationLine) {
-          illustrationLine = illustrationLine.replace(/^Иллюстрация[:：]\s*/, "");
-          if (currentMode === "JAP") {
-              illustrationLine = illustrationPrefixJAP + illustrationLine;
-          } else {
-              illustrationLine = illustrationPrefixRUS + " " + illustrationLine;
-          }
-          addLine("");
-          addLine(illustrationLine);
+    }
+    
+    block.content.forEach(line => {
+      if (line.trim() === "") {
+        addLine("");
+        return;
       }
-      
-      let formatted = outputLines.map(line => `    "${escapeQuotes(line)}",`).join('\n');
-      // Исправлено формирование структуры блоков
-      return `${block.id} => [\n${formatted}\n],`;
+      if (line.trim().match(/^Иллюстрация[:：]/)) {
+        illustrationLine = line.trim();
+        return;
+      }
+      if (isLineInActiveLang(line)) {
+        let splitted = splitIntoLines(line, getCurrentMaxLineLength());
+        splitted.forEach(subLine => addLine(subLine));
+      }
+    });
+    
+    if (illustrationLine) {
+      illustrationLine = illustrationLine.replace(/^Иллюстрация[:：]\s*/, "");
+      if (currentMode === "JAP") {
+        illustrationLine = illustrationPrefixJAP + illustrationLine;
+      } else {
+        illustrationLine = illustrationPrefixRUS + " " + illustrationLine;
+      }
+      addLine("");
+      addLine(illustrationLine);
+    }
+    
+    let formatted = outputLines.map(line => `    "${escapeQuotes(line)}",`).join('\n');
+    return `${block.id} => [\n${formatted}\n],`;
   }
 
   // Разбивка текста на строки с учётом максимальной длины для Library
@@ -825,6 +791,7 @@ function processJobChangeText(text) {
     return currentMode === "JAP" ? maxLineLengthJap : maxLineLengthRus;
   }
 
+  // Функция форматирования для вывода
   function fixFormatting() {
     try {
       const outputEl = document.getElementById('output-content');
@@ -936,163 +903,10 @@ function processJobChangeText(text) {
     }
   }
 
-  function decreaseLength() {
-      adjustLength(-1);
-  }
-
-  function increaseLength() {
-      adjustLength(1);
-  }
-
-  // Изменение длины строки (и сохранение формата)
-  function adjustLength(delta) {
-      console.log("Adjusting length with delta:", delta); // Debugging
-      
-      // Get current value before adjustment
-      let oldValue;
-      if (currentTab === "jobchange") {
-          oldValue = maxLineLengthJobChangeVar;
-          maxLineLengthJobChangeVar = Math.max(10, maxLineLengthJobChangeVar + delta);
-          console.log(`JobChange line length: ${oldValue} → ${maxLineLengthJobChangeVar}`);
-      } else if (currentMode === "JAP") {
-          oldValue = maxLineLengthJap;
-          maxLineLengthJap = Math.max(10, maxLineLengthJap + delta);
-          console.log(`JAP line length: ${oldValue} → ${maxLineLengthJap}`);
-      } else {
-          oldValue = maxLineLengthRus;
-          maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
-          console.log(`RUS line length: ${oldValue} → ${maxLineLengthRus}`);
-      }
-      
-      // Update UI and output
-      updateLengthDisplay();
-      updateOutput();
-  }
-
-  // Clean implementation of handlers to prevent multiple triggers
-  function setupEventListeners() {
-      // First remove any existing listeners
-      const decreaseBtn = document.getElementById('decrease-length');
-      const increaseBtn = document.getElementById('increase-length');
-      
-      // Clone and replace buttons to remove all listeners
-      const newDecreaseBtn = decreaseBtn.cloneNode(true);
-      const newIncreaseBtn = increaseBtn.cloneNode(true);
-      
-      decreaseBtn.parentNode.replaceChild(newDecreaseBtn, decreaseBtn);
-      increaseBtn.parentNode.replaceChild(newIncreaseBtn, increaseBtn);
-      
-      // Add single listeners with direct delta values
-      newDecreaseBtn.addEventListener('click', function(e) {
-          e.stopPropagation(); // Prevent bubbling
-          adjustLength(-1);
-      });
-      
-      newIncreaseBtn.addEventListener('click', function(e) {
-          e.stopPropagation(); // Prevent bubbling
-          adjustLength(1);
-      });
-      
-      console.log("Event listeners set up");
-  }
-
-  // Event listeners
-  document.getElementById('copy-btn').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('output-content').textContent)
-      .then(() => alert('Текст скопирован!'))
-      .catch(err => console.error('Ошибка копирования:', err));
-  });
-  document.getElementById('clear-btn').addEventListener('click', fixFormatting);
-  document.addEventListener("DOMContentLoaded", function () {
-  const reportBtn = document.getElementById("report-btn");
-  if (reportBtn) {
-    reportBtn.addEventListener("click", generateErrorLog);
-  } else {
-    console.warn("Кнопка 'Репорт' (report-btn) не найдена в HTML!");
-  }
-});
-
   // Инициализация
-  updateOutput();
-
-// --- Упрощённая функция очистки вывода ---
-  function cleanOutput() {
-      const outputEl = document.getElementById('output-content');
-      let lines = outputEl.textContent.split('\n');
-      let newLines = [];
-      let inBlock = false;
-      let prevLine = '';
-      
-      // Track categories and indentation states
-      const categories = ["Экипировка:", "Навыки:", "Способности:"];
-      let currentCategory = "";
-      const indent = "			   "; // Standard indentation for continuation lines
-      
-      for(let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          const trimmedLine = line.trim();
-          
-          // Check if we're at the start or end of a block
-          if(trimmedLine === '[[') {
-              newLines.push(line);
-              inBlock = true;
-              i++; // Skip the next line after [[
-              continue;
-          }
-          
-          if(trimmedLine === ']],') {
-              if(prevLine.trim() === '],') {
-                  newLines.pop(); // Remove the second-to-last line before ]],
-              }
-              newLines.push(line);
-              inBlock = false;
-              currentCategory = "";
-              continue;
-          }
-          
-          if(inBlock) prevLine = line;
-          
-          // Check if line contains a category
-          let isCategoryLine = false;
-          for(let category of categories) {
-              if(trimmedLine.startsWith(category)) {
-                  currentCategory = category;
-                  isCategoryLine = true;
-                  break;
-              }
-          }
-          
-          // Process the line based on content type
-          if(isCategoryLine) {
-              // This is a category header line - clean it but keep as is
-              let cleanedLine = trimmedLine.replace(/\s*　\s*/g, '　');
-              newLines.push(cleanedLine);
-              
-          } else if(currentCategory && !isCategoryLine) {
-              // This is a continuation of a category - apply indentation
-              
-              // If line starts with wide space or has indentation already
-              let content = trimmedLine;
-              if(content.startsWith('　')) {
-                  content = content.substring(1);
-              }
-              
-              // Clean spaces around wide spaces
-              content = content.replace(/\s*　\s*/g, '　');
-              
-              // Apply proper indentation
-              newLines.push(indent + content);
-              
-          } else {
-              // Regular line - just clean it
-              let cleanedLine = trimmedLine.replace(/\s*　\s*/g, '　');
-              newLines.push(cleanedLine);
-          }
-      }
-      
-      outputEl.textContent = newLines.join('\n');
-      isFormatted = true;
-  }
+  document.addEventListener('DOMContentLoaded', function() {
+    updateOutput();
+  });
 </script>
 </body>
 </html>
