@@ -59,6 +59,26 @@
             background: #fff;
             border-bottom: 2px solid #000;
         }
+        #skills-file-container {
+            display: none;
+            margin-top: 10px;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+        }
+        #process-skill-btn {
+            display: none;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        #process-skill-btn:hover {
+            background: #388E3C;
+        }
     </style>
 </head>
 <body>
@@ -70,6 +90,7 @@
     <div class="tabs">
         <button class="tab-btn active" data-mode="library">Library(Enemy)</button>
         <button class="tab-btn" data-mode="jobchange">JobChange</button>
+        <button class="tab-btn" data-mode="skillreplacer">Skill Replacer</button>
     </div>
 
     <!-- Кнопки выбора языка -->
@@ -97,6 +118,13 @@
             <button class="length-btn" id="increase-length">+</button>
         </div>
         <button id="copy-btn">Копировать результат</button>
+        
+        <!-- Skill Replacer specific controls -->
+        <div id="skills-file-container">
+            <label>Файл Skills: </label>
+            <input type="file" id="skills-file-input" accept=".txt">
+            <button id="process-skill-btn">Обработать Skills</button>
+        </div>
     </div>
 
 <script>
@@ -106,6 +134,7 @@
   let maxLineLengthRus = 39;
   let maxLineLengthJap = 22;
   let maxLineLengthJobChangeVar = 30; // Лимит строки для JobChange
+  let isFormatted = false; // Флаг исправленного форматирования
 
   // Префиксы для иллюстрации
   const illustrationPrefixRUS = "Иллюстрация:";
@@ -117,7 +146,29 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentTab = btn.getAttribute('data-mode');
-      updateOutput();
+      isFormatted = false; // Сброс флага исправленного форматирования
+      
+      // Показываем/скрываем элементы в зависимости от выбранной вкладки
+      const skillsFileContainer = document.getElementById('skills-file-container');
+      const lengthControlContainer = document.querySelector('.length-control');
+      const processSkillBtn = document.getElementById('process-skill-btn');
+      const outputContainer = document.querySelector('.output');
+      const copyBtn = document.getElementById('copy-btn');
+      
+      if (currentTab === "skillreplacer") {
+        if (skillsFileContainer) skillsFileContainer.style.display = 'flex';
+        if (processSkillBtn) processSkillBtn.style.display = 'inline-block';
+        if (lengthControlContainer) lengthControlContainer.style.display = 'none';
+        if (outputContainer) outputContainer.style.display = 'none';
+        if (copyBtn) copyBtn.style.display = 'none';
+      } else {
+        if (skillsFileContainer) skillsFileContainer.style.display = 'none';
+        if (processSkillBtn) processSkillBtn.style.display = 'none';
+        if (lengthControlContainer) lengthControlContainer.style.display = 'flex';
+        if (outputContainer) outputContainer.style.display = 'block';
+        if (copyBtn) copyBtn.style.display = 'inline-block';
+        updateOutput();
+      }
     });
   });
 
@@ -145,6 +196,9 @@
   document.getElementById('decrease-length').addEventListener('click', () => adjustLength(-1));
   document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
   document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
+  
+// Явно добавляем обработчик для кнопки Skill Replacer
+  document.getElementById('process-skill-btn').addEventListener('click', processSkillReplacer);
 
   // Функция копирования в буфер
   function copyToClipboard() {
@@ -162,7 +216,13 @@
     } else {
       maxLineLengthRus = Math.max(10, maxLineLengthRus + delta);
     }
-    updateOutput();
+
+    // Если формат уже исправлен, корректируем перед обновлением
+    if (isFormatted) {
+      fixFormatting();
+    }
+
+    updateOutput(); // Вызываем обновление после исправления
   }
 
   // Единая функция обновления отображения длины строки
@@ -185,7 +245,17 @@
       return;
     }
     try {
-      let output = currentTab === "library" ? processText(inputText) : processJobChangeText(inputText);
+      let output;
+      
+      if (currentTab === "library") {
+        output = processText(inputText);
+      } else if (currentTab === "jobchange") {
+        output = processJobChangeText(inputText);
+      } else if (currentTab === "skillreplacer") {
+        // Для вкладки Skill Replacer не выполняем автоматическую обработку
+        return;
+      }
+      
       document.getElementById('output-content').textContent = output;
     } catch (e) {
       document.getElementById('output-content').textContent = 'Ошибка форматирования';
@@ -493,6 +563,241 @@
     }
   }
 
+  // Corrected function to format abilities while preserving wide spaces
+  function formatCategoryWithJapaneseStyle(lines, maxLineLength) {
+    try {
+      if (!lines || lines.length === 0) return [];
+      
+      // Determine the category from the first line
+      const firstLine = lines[0].trim();
+      
+      // Check for both types of colons in category headers
+      let categoryMatch = firstLine.match(/^(Экипировка|Навыки|Способности|Способность)[：:]/);
+      
+      if (!categoryMatch) return []; // No category found
+      
+      let categoryName = categoryMatch[1];
+      if (categoryName === "Способность") {
+        categoryName = "Способности"; // Normalize to plural form
+      }
+      
+      // Detect if the input already has the category name with either colon style
+      const hasDuplicateCategory = firstLine.indexOf(categoryName + ":") === 0 || 
+                                 firstLine.indexOf(categoryName + "：") === 0;
+      
+      // Process based on category type
+      if (categoryName === "Экипировка") {
+        return formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory);
+      } 
+      else if (categoryName === "Навыки") {
+        return formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory);
+      }
+      else if (categoryName === "Способности") {
+        return formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory);
+      }
+      
+      return []; // Fallback
+    } catch (e) {
+      console.error("Error in formatCategoryWithJapaneseStyle:", e);
+      return ["Error processing category: " + e.message];
+    }
+  }
+
+  // Modified format functions to prevent category duplication
+  function formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategory) {
+    const indent = "			   "; // Standard indentation
+    let result = [];
+    
+    // Collect all equipment text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Экипировка[：:])\s*/, "");
+      }
+      fullText += " " + content;
+    });
+    
+    // Split by wide spaces correctly
+    let items = [];
+    if (fullText.includes('　')) {
+      // Use wide spaces as delimiters
+      const parts = fullText.split('　');
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].trim()) {
+          items.push(parts[i].trim());
+        }
+      }
+    } else {
+      // Fallback to regular spaces
+      items = fullText.split(' ').filter(Boolean);
+    }
+    
+    if (items.length === 0) return [];
+    
+    // Process items
+    let currentLine = categoryName + ": " + items[0];
+    
+    for (let i = 1; i < items.length; i++) {
+      // Check if adding this item would exceed the line length
+      if ((currentLine.length + 1 + items[i].length + 1) <= maxLineLength) {
+        currentLine += "　" + items[i];
+      } else {
+        result.push(currentLine);
+        currentLine = indent + items[i];
+      }
+    }
+    
+    // Add the last line
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    }
+    
+    return result;
+  }
+
+  // Similar updates for formatSkills function
+  function formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory) {
+    const indent = "			   "; // Standard indentation
+    let result = [];
+    
+    // Collect all skill text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Навыки[：:])\s*/, "");
+      }
+      fullText += " " + content;
+    });
+    
+    // Extract skills by preserving the original wide spaces
+    let skillItems = [];
+    
+    // Check if the text contains wide spaces
+    if (fullText.includes('　')) {
+      // Extract original wide-space separated items
+      const segmentsByWideSpace = fullText.split('　');
+      
+      for (let i = 0; i < segmentsByWideSpace.length; i++) {
+        const segment = segmentsByWideSpace[i].trim();
+        if (segment) {
+          skillItems.push(segment);
+        }
+      }
+    } else {
+      // Fallback to space splitting
+      skillItems = fullText.split(' ').filter(Boolean);
+    }
+    
+    // Process skill items
+    let currentLine = categoryName + ": " + skillItems[0];
+    
+    for (let i = 1; i < skillItems.length; i++) {
+      if ((currentLine.length + 1 + skillItems[i].length + 1) <= maxLineLength) {
+        // Add a wide space between skills
+        currentLine += "　" + skillItems[i];
+      } else {
+        result.push(currentLine);
+        currentLine = indent + skillItems[i];
+      }
+    }
+    
+    // Add the last line
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    }
+    
+    return result;
+  }
+
+  // Updated formatAbilities function
+  function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory) {
+    const indent = "			   "; // Standard indentation
+    let result = [];
+    
+    // Collect all ability text
+    let fullText = "";
+    
+    lines.forEach((line, index) => {
+      let content = line.trim();
+      if (index === 0) {
+        // Remove the category prefix from the first line
+        content = content.replace(/^(Способности[：:])\s*/, "");
+      }
+      // Add a space between lines to ensure proper separation
+      fullText += (index > 0 ? " " : "") + content;
+    });
+    
+    // Clean up the text
+    fullText = fullText.trim();
+    
+    // Properly split abilities by wide spaces
+    let abilities = [];
+    if (fullText.includes('　')) {
+      // Split by wide spaces first
+      const wideSpaceSplit = fullText.split('　');
+      
+      for (let part of wideSpaceSplit) {
+        if (part.trim()) {
+          abilities.push(part.trim());
+        }
+      }
+    } else {
+      // Look for ability patterns: percentages, effects, etc.
+      // Split by logical breaks and patterns
+      abilities = fullText.split(/\s+(?=[А-Я])/).filter(a => a.trim().length > 0);
+      
+      // If no clear separations found, treat as a single ability
+      if (abilities.length === 0) {
+        abilities = [fullText];
+      }
+    }
+    
+    // Remove any empty abilities
+    abilities = abilities.filter(ability => ability && ability.trim().length > 0);
+    
+    // Start with category name
+    let currentLine = categoryName + ": ";
+    let firstAbility = true;
+    
+    // Process each ability using the line length limit
+    for (let i = 0; i < abilities.length; i++) {
+      const ability = abilities[i].trim();
+      
+      // Skip empty abilities
+      if (!ability) continue;
+      
+      // Check if we can add this ability to the current line
+      if (firstAbility) {
+        // First ability always goes on the first line
+        currentLine += ability;
+        firstAbility = false;
+      } else if ((currentLine.length + 1 + ability.length) <= maxLineLength) {
+        // Add ability with proper separator
+        currentLine += "　" + ability;
+      } else {
+        // Line is full, add it to result and start a new line
+        result.push(currentLine);
+        currentLine = indent + ability;
+      }
+    }
+    
+    // Add the last line if it has content
+    if (currentLine && currentLine !== (categoryName + ": ")) {
+      result.push(currentLine);
+    } else if (abilities.length === 0 && currentLine === (categoryName + ": ")) {
+      // If we have no abilities, add "Нет" for "None"
+      result.push(categoryName + ": Нет");
+    }
+    
+    return result;
+  }
+
   // Process text one line at a time for better readability
   function wrapText(text, maxLen, lang) {
     try {
@@ -643,10 +948,121 @@
     return currentMode === "JAP" ? maxLineLengthJap : maxLineLengthRus;
   }
 
-  // Инициализация
-  document.addEventListener('DOMContentLoaded', function() {
-    updateOutput();
-  });
+  
+  // Обновленная функция парсинга файла Skills
+  function parseSkills(text) {
+    console.log("Начинаем парсинг Skills...");
+    const skillMap = {};
+    
+    // Проверка формата файла
+    if (text.indexOf("Skill") === -1) {
+      console.warn("Предупреждение: в файле не найдены записи с 'Skill'");
+    }
+    
+    // Пробуем разные регулярные выражения для поиска навыков
+    const blocks = text.split(/^Skill\s+/gm);
+    console.log(`Найдено блоков: ${blocks.length - 1}`);
+    
+    blocks.forEach((block, index) => {
+      if (index === 0 || !block.trim()) return; // Пропускаем первый блок (он перед первым Skill)
+      
+      const lines = block.split('\n');
+      if (lines.length === 0) return;
+      
+      // Получаем номер навыка из первой строки
+      const firstLine = lines[0].trim();
+      const skillNumberMatch = firstLine.match(/^(\d+)/);
+      
+      if (!skillNumberMatch) {
+        console.warn(`Не удалось извлечь номер навыка из строки: ${firstLine}`);
+        return;
+      }
+      
+      const skillNumber = skillNumberMatch[1];
+      
+      // Ищем строку с именем
+      const nameLine = lines.find(line => line.trim().match(/^Name\s*=\s*"/i));
+      
+      if (!nameLine) {
+        console.warn(`Не найдена строка с именем для навыка ${skillNumber}`);
+        return;
+      }
+      
+      // Извлекаем имя из строки "Name = "имя"..."
+      const nameMatch = nameLine.match(/Name\s*=\s*"([^"]+)"/i);
+      
+      if (nameMatch && nameMatch[1]) {
+        const name = nameMatch[1].trim();
+        skillMap[skillNumber] = name;
+        
+        if (index < 5 || index > blocks.length - 5) {
+          console.log(`Добавлен навык: ${skillNumber} => ${name}`);
+        }
+      } else {
+        console.warn(`Не удалось извлечь имя из строки: ${nameLine}`);
+      }
+    });
+    
+    console.log(`Всего обработано навыков: ${Object.keys(skillMap).length}`);
+    return skillMap;
+  }
+
+  // Function to replace Skill references in main text with skill names
+  function replaceSkills(text, skillMap) {
+    // Улучшенное регулярное выражение для поиска паттернов Skill
+    return text.replace(/Skill\s+(\d+)/gi, function(match, number) {
+      console.log(`Обнаружено совпадение: ${match}, номер: ${number}, замена на: ${skillMap[number] || match}`);
+      return skillMap[number] || match;
+    });
+  }
+
+  // Обновленная функция обработки для Skill Replacer
+  function processSkillReplacer() {
+    try {
+      console.log("Начинаем обработку Skills...");
+      const inputData = document.getElementById('input-data');
+      const mainText = inputData.value;
+      if (!mainText.trim()) {
+        alert('Пожалуйста, введите текст с упоминаниями навыков!');
+        return;
+      }
+      
+      const skillsFileInput = document.getElementById('skills-file-input');
+      if (!skillsFileInput || !skillsFileInput.files[0]) {
+        alert('Пожалуйста, загрузите файл Skills!');
+        return;
+      }
+      
+      console.log("Файл Skills выбран, читаем содержимое...");
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        try {
+          console.log("Файл прочитан, размер:", e.target.result.length);
+          const skillMap = parseSkills(e.target.result);
+          console.log("Карта навыков создана, найдено навыков:", Object.keys(skillMap).length);
+          
+          const result = replaceSkills(mainText, skillMap);
+          console.log("Обработка завершена, обновляем поле ввода...");
+          inputData.value = result;
+          updateOutput();
+        } catch (err) {
+          console.error("Ошибка при обработке: ", err);
+          alert('Ошибка обработки файла Skills: ' + err.message);
+        }
+      };
+      
+      reader.onerror = function() {
+        console.error("Ошибка чтения файла");
+        alert('Ошибка чтения файла Skills!');
+      };
+      
+      reader.readAsText(skillsFileInput.files[0]);
+    } catch (e) {
+      console.error("Общая ошибка в processSkillReplacer:", e);
+      alert('Ошибка обработки: ' + e.message);
+    }
+  }
 </script>
 </body>
 </html>
