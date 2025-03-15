@@ -137,7 +137,7 @@
   let isFormatted = false; // Флаг исправленного форматирования
 
   // Префиксы для иллюстрации
-  const illustrationPrefixRUS = "Иллюстрация:";
+  const illustrationPrefixRUS = "Иллюстрация：";
   const illustrationPrefixJAP = "イラスト：";
 
   // Переключение вкладок
@@ -840,27 +840,171 @@
     return str.replace(/"/g, '\\"');
   }
 
-  // Функция обработки для вкладки Library
+  // Обновленная функция обработки для вкладки Library
   function processText(text) {
     let lines = text.split('\n');
-    let blocks = [];
+    
+    // Шаг 1: Собираем информацию о блоках и ID
+    let allIDs = new Set();       // Все ID, которые нужно создать
+    let primaryIDs = new Set();   // ID, которые указаны первыми в каждом блоке
+    let blockContents = {};       // Содержимое для каждого ID
+    
+    // Первый проход - собираем информацию о блоках
     let currentBlock = null;
+    
     for (let line of lines) {
-      if (line.trim().match(/^\d+$/)) { // новая метка блока
+      if (isIDLine(line)) {
+        // Сохраняем предыдущий блок, если есть
         if (currentBlock) {
-          blocks.push(currentBlock);
+          // Сохраняем содержимое для каждого ID в блоке
+          for (const id of currentBlock.idList) {
+            if (!blockContents[id]) {
+              blockContents[id] = [...currentBlock.content];
+            }
+          }
         }
-        currentBlock = { id: line.trim(), content: [] };
+        
+        // Создаем новый блок
+        const idText = line.trim();
+        const idList = parseIDList(idText);
+        
+        if (idList.length > 0) {
+          // Первый ID считаем первичным (основным)
+          primaryIDs.add(idList[0]);
+          
+          // Все ID добавляем в общий набор
+          for (const id of idList) {
+            allIDs.add(id);
+          }
+        }
+        
+        currentBlock = { 
+          idList: idList,
+          content: [] 
+        };
       } else {
         if (currentBlock) {
           currentBlock.content.push(line);
         }
       }
     }
+    
+    // Сохраняем последний блок
     if (currentBlock) {
-      blocks.push(currentBlock);
+      for (const id of currentBlock.idList) {
+        if (!blockContents[id]) {
+          blockContents[id] = [...currentBlock.content];
+        }
+      }
     }
-    return blocks.map(block => processBlock(block)).join('\n');
+    
+    // Шаг 2: Определяем диапазон первичных ID
+    const primaryIDArray = Array.from(primaryIDs);
+    
+    if (primaryIDArray.length === 0) {
+      return ""; // Нет блоков для обработки
+    }
+    
+    const minPrimaryID = Math.min(...primaryIDArray);
+    const maxPrimaryID = Math.max(...primaryIDArray);
+    
+    // Шаг 3: Создаем финальные блоки в правильном порядке
+    let finalBlocks = [];
+    
+    // Сначала добавляем блоки с ID в диапазоне первичных ID
+    for (let id = minPrimaryID; id <= maxPrimaryID; id++) {
+      if (allIDs.has(id) && blockContents[id]) {
+        finalBlocks.push({
+          id: id,
+          content: blockContents[id]
+        });
+      }
+    }
+    
+    // Затем добавляем блоки с ID вне диапазона первичных ID
+    const externalIDs = Array.from(allIDs)
+      .filter(id => id < minPrimaryID || id > maxPrimaryID)
+      .sort((a, b) => a - b);
+    
+    for (const id of externalIDs) {
+      if (blockContents[id]) {
+        finalBlocks.push({
+          id: id,
+          content: blockContents[id]
+        });
+      }
+    }
+    
+    // Шаг 4: Формируем результат
+    let result = '';
+    
+    for (const block of finalBlocks) {
+      const processedBlock = { id: block.id.toString(), content: block.content };
+      result += processBlock(processedBlock) + '\n';
+    }
+    
+    return result;
+  }
+
+  // Функция для проверки строки на ID (включая диапазоны вида "2-3")
+  function isIDLine(line) {
+    // Проверяем различные форматы ID:
+    // - Просто число: "123"
+    // - Диапазон: "123-456"
+    // - С комментарием: "123 #комментарий" или "123-456 #комментарий"
+    // - Список ID через запятую: "146, 559" или "146,559"
+    return line.trim().match(/^(\d+(-\d+)?)(,\s*\d+)*(\s*#.*)?$/);
+  }
+
+  // Обновленная функция для очистки ID от комментариев
+  function cleanIDText(idText) {
+    // Удаляем комментарий после #
+    return idText.replace(/#.*$/, '').trim();
+  }
+
+  // Функция для парсинга списка ID (включая через запятую)
+  function parseIDList(idText) {
+    // Очищаем от комментариев
+    const cleanedText = cleanIDText(idText);
+    
+    // Разбиваем по запятым и обрабатываем каждую часть
+    const parts = cleanedText.split(',').map(part => part.trim());
+    
+    // Массив для хранения всех ID
+    let allIDs = [];
+    
+    // Обрабатываем каждую часть (может быть отдельным ID или диапазоном)
+    for (const part of parts) {
+      if (part.includes('-')) {
+        // Это диапазон - используем существующую функцию для распаковки
+        const rangeIDs = expandIDRange(part);
+        allIDs = allIDs.concat(rangeIDs);
+      } else if (part) { // Проверяем, что часть не пуста
+        // Это отдельный ID
+        allIDs.push(parseInt(part));
+      }
+    }
+    
+    return allIDs;
+  }
+
+  // Обновленная функция для распаковки диапазона ID в массив
+  function expandIDRange(idText) {
+    // Сначала очищаем ID от комментариев
+    const cleanedID = cleanIDText(idText);
+    
+    if (!cleanedID.includes('-')) {
+      return [parseInt(cleanedID)];
+    }
+    
+    const [start, end] = cleanedID.split('-').map(Number);
+    const result = [];
+    
+    for (let id = start; id <= end; id++) {
+      result.push(id);
+    }
+    
+    return result;
   }
 
   // Функция для проверки строки на наличие символов нужного языка
@@ -888,30 +1032,61 @@
       }
     }
     
+    // Сначала ищем информацию об иллюстрации во всем блоке
+    let japIllustration = "";
+    let rusIllustration = "";
+    
+    block.content.forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine.match(/^Иллюстрация[:：]/)) {
+        rusIllustration = trimmedLine;
+      } else if (trimmedLine.match(/^イラスト：/)) {
+        japIllustration = trimmedLine;
+      }
+    });
+    
+    // Добавляем строки активного языка
     block.content.forEach(line => {
       if (line.trim() === "") {
         addLine("");
         return;
       }
-      if (line.trim().match(/^Иллюстрация[:：]/)) {
-        illustrationLine = line.trim();
+      
+      // Пропускаем строки с информацией об иллюстрации
+      if (line.trim().match(/^Иллюстрация[:：]/) || line.trim().match(/^イラスト：/)) {
         return;
       }
+      
       if (isLineInActiveLang(line)) {
         let splitted = splitIntoLines(line, getCurrentMaxLineLength());
         splitted.forEach(subLine => addLine(subLine));
       }
     });
     
+    // Выбираем источник информации об иллюстрации
+    if (currentMode === "RUS") {
+      illustrationLine = rusIllustration || japIllustration;
+    } else {
+      illustrationLine = japIllustration || rusIllustration;
+    }
+    
+    // Добавляем информацию об иллюстрации с правильным форматированием
     if (illustrationLine) {
-      illustrationLine = illustrationLine.replace(/^Иллюстрация[:：]\s*/, "");
-      if (currentMode === "JAP") {
-        illustrationLine = illustrationPrefixJAP + illustrationLine;
-      } else {
-        illustrationLine = illustrationPrefixRUS + " " + illustrationLine;
+      // Извлекаем имя иллюстратора
+      let illustratorName = "";
+      if (illustrationLine.match(/^Иллюстрация[:：]/)) {
+        illustratorName = illustrationLine.replace(/^Иллюстрация[:：]\s*/, "");
+      } else if (illustrationLine.match(/^イラスト：/)) {
+        illustratorName = illustrationLine.replace(/^イラスト：\s*/, "");
       }
+      
+      // Форматируем согласно выбранному языку
       addLine("");
-      addLine(illustrationLine);
+      if (currentMode === "JAP") {
+        addLine(illustrationPrefixJAP + illustratorName);
+      } else {
+        addLine(illustrationPrefixRUS + " " + illustratorName);
+      }
     }
     
     let formatted = outputLines.map(line => `    "${escapeQuotes(line)}",`).join('\n');
