@@ -33,6 +33,7 @@
             justify-content: center;
             gap: 20px;
             margin: 20px 0;
+            flex-wrap: wrap;
         }
         .length-control {
             display: flex;
@@ -79,6 +80,49 @@
         #process-skill-btn:hover {
             background: #388E3C;
         }
+        #copy-btn, #compile-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #copy-btn {
+            background: #6c757d;
+            color: white;
+        }
+        #compile-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        .compile-mode-btn {
+            padding: 8px 16px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+        }
+        .compile-mode-btn.active {
+            background-color: #f44336;
+        }
+        #button-container {
+            display: flex;
+            gap: 10px;
+        }
+        #status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -95,7 +139,7 @@
     </div>
 
     <!-- Кнопки выбора языка -->
-    <div class="lang-controls">
+    <div class="lang-controls" id="lang-controls">
         <button class="lang-btn active" id="btn-rus">RUS</button>
         <button class="lang-btn" id="btn-jap">JAP</button>
     </div>
@@ -112,13 +156,17 @@
     </div>
 
     <div class="controls">
-        <div class="length-control">
+        <div class="length-control" id="length-control">
             <span>ДЛИНА СТРОКИ:</span>
             <button class="length-btn" id="decrease-length">-</button>
             <span id="current-length"></span>
             <button class="length-btn" id="increase-length">+</button>
         </div>
-        <button id="copy-btn">Копировать результат</button>
+        <div id="button-container">
+            <button id="copy-btn">Копировать результат</button>
+            <button id="compile-btn" style="display: none;">Компилировать данные</button>
+        </div>
+        <button id="compile-mode-btn" class="compile-mode-btn">Режим прямой компиляции</button>
         
         <!-- Skill Replacer specific controls -->
         <div id="skills-file-container">
@@ -127,6 +175,8 @@
             <button id="process-skill-btn">Обработать Skills</button>
         </div>
     </div>
+    
+
 
 <script>
   // Глобальные переменные для всех режимов
@@ -136,6 +186,18 @@
   let maxLineLengthJap = 22;
   let maxLineLengthJobChangeVar = 30; // Лимит строки для JobChange
   let isFormatted = false; // Флаг исправленного форматирования
+  let isCompileMode = false; // Режим прямой компиляции
+  
+  // Константы для имен файлов
+  const FILE_NAMES = {
+    "library": "201 - Library(Enemy).rb",
+    "jobchange": "197 - JobChange.rb",
+    "medal": "204 - Library(Medal).rb"
+  };
+  
+  // Глобальные переменные для хранения информации о выбранном файле
+  window.lastSelectedFileContent = null;
+  window.lastSelectedFileName = null;
 
   // Префиксы для иллюстрации
   const illustrationPrefixRUS = "Иллюстрация：";
@@ -151,23 +213,31 @@
       
       // Показываем/скрываем элементы в зависимости от выбранной вкладки
       const skillsFileContainer = document.getElementById('skills-file-container');
-      const lengthControlContainer = document.querySelector('.length-control');
+      const lengthControlContainer = document.getElementById('length-control');
       const processSkillBtn = document.getElementById('process-skill-btn');
       const outputContainer = document.querySelector('.output');
       const copyBtn = document.getElementById('copy-btn');
+      const langControls = document.getElementById('lang-controls');
+      const compileModeBtn = document.getElementById('compile-mode-btn');
       
       if (currentTab === "skillreplacer") {
+        // Скрываем ненужные элементы для вкладки Skill Replacer
         if (skillsFileContainer) skillsFileContainer.style.display = 'flex';
         if (processSkillBtn) processSkillBtn.style.display = 'inline-block';
         if (lengthControlContainer) lengthControlContainer.style.display = 'none';
         if (outputContainer) outputContainer.style.display = 'none';
         if (copyBtn) copyBtn.style.display = 'none';
+        if (langControls) langControls.style.display = 'none'; // Скрываем выбор языка
+        if (compileModeBtn) compileModeBtn.style.display = 'none'; // Скрываем кнопку режима компиляции
       } else {
+        // Возвращаем отображение элементов для других вкладок
         if (skillsFileContainer) skillsFileContainer.style.display = 'none';
         if (processSkillBtn) processSkillBtn.style.display = 'none';
         if (lengthControlContainer) lengthControlContainer.style.display = 'flex';
         if (outputContainer) outputContainer.style.display = 'block';
         if (copyBtn) copyBtn.style.display = 'inline-block';
+        if (langControls) langControls.style.display = 'block'; // Показываем выбор языка
+        if (compileModeBtn) compileModeBtn.style.display = 'block'; // Показываем кнопку режима компиляции
         updateOutput();
       }
     });
@@ -200,12 +270,683 @@
   
   // Явно добавляем обработчик для кнопки Skill Replacer
   document.getElementById('process-skill-btn').addEventListener('click', processSkillReplacer);
+  
+  // Обработчик для кнопки режима компиляции
+  document.getElementById('compile-mode-btn').addEventListener('click', toggleCompileMode);
+  
+  // Обработчик для кнопки компиляции данных
+  document.getElementById('compile-btn').addEventListener('click', compileData);
+  
+
 
   // Функция копирования в буфер
   function copyToClipboard() {
     navigator.clipboard.writeText(document.getElementById('output-content').textContent)
       .then(() => alert('Текст скопирован!'))
       .catch(err => console.error('Ошибка копирования:', err));
+  }
+  
+  // Функция переключения режима компиляции
+  function toggleCompileMode() {
+    const compileModeBtn = document.getElementById('compile-mode-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const compileBtn = document.getElementById('compile-btn');
+    
+    isCompileMode = !isCompileMode;
+    
+    if (isCompileMode) {
+      // Включаем режим компиляции
+      compileModeBtn.textContent = 'Стандартный режим';
+      compileModeBtn.classList.add('active');
+      copyBtn.style.display = 'none';
+      compileBtn.style.display = 'block';
+      
+      // Показываем инструкцию
+      showInstructions();
+    } else {
+      // Выключаем режим компиляции
+      compileModeBtn.textContent = 'Режим прямой компиляции';
+      compileModeBtn.classList.remove('active');
+      copyBtn.style.display = 'block';
+      compileBtn.style.display = 'none';
+      
+      // Скрываем инструкции
+      hideInstructions();
+    }
+  }
+  
+  // Функция для отображения инструкций
+  function showInstructions() {
+    let instructionsDiv = document.getElementById('compile-instructions');
+    if (!instructionsDiv) {
+      instructionsDiv = document.createElement('div');
+      instructionsDiv.id = 'compile-instructions';
+      instructionsDiv.className = 'compile-instructions';
+      instructionsDiv.innerHTML = `
+        <h3>Инструкция по использованию режима прямой компиляции</h3>
+        <ol start="1">
+          <li>Выберите нужную вкладку и подготовьте данные в окне вывода</li>
+          <li>Выберите оригинальный файл Ruby через поле загрузки ниже</li>
+          <li>Нажмите "Компилировать данные", чтобы создать обновленную версию файла</li>
+        </ol>
+        <div id="file-input-container" style="margin-top: 15px;">
+          <label for="input-file">Выбрать оригинальный файл для обновления:</label>
+          <input type="file" id="input-file" accept=".rb" style="margin-top: 5px;">
+        </div>
+        <div id="download-container" style="margin-top: 15px; display: none;">
+          <a id="download-link" href="#" download="" class="download-button">Скачать обновленный файл</a>
+        </div>
+      `;
+      
+      document.querySelector('.container').insertAdjacentElement('afterend', instructionsDiv);
+      
+      // Добавляем стили для инструкций
+      const styleElement = document.createElement('style');
+      styleElement.textContent = `
+        .compile-instructions {
+          margin: 20px auto;
+          padding: 15px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #f8f9fa;
+          max-width: 800px;
+        }
+        .compile-instructions h3 {
+          margin-top: 0;
+          color: #2c3e50;
+        }
+        .compile-instructions ol {
+          padding-left: 20px;
+        }
+        .compile-instructions li {
+          margin-bottom: 8px;
+        }
+        .compile-instructions ul {
+          margin-top: 5px;
+        }
+        .download-button {
+          display: inline-block;
+          padding: 8px 16px;
+          background-color: #4CAF50;
+          color: white;
+          text-decoration: none;
+          border-radius: 4px;
+          text-align: center;
+        }
+        .download-button:hover {
+          background-color: #388E3C;
+        }
+        #download-container {
+          text-align: center;
+        }
+      `;
+      document.head.appendChild(styleElement);
+      
+      // Добавляем обработчик события для выбора файла
+      const fileInput = document.getElementById('input-file');
+      if (fileInput) {
+        fileInput.addEventListener('change', handleFileSelection);
+      }
+    } else {
+      instructionsDiv.style.display = 'block';
+    }
+  }
+  
+  // Функция для скрытия инструкций
+  function hideInstructions() {
+    const instructionsDiv = document.getElementById('compile-instructions');
+    if (instructionsDiv) {
+      instructionsDiv.style.display = 'none';
+    }
+  }
+  
+  // Обработчик выбора файла
+  function handleFileSelection(event) {
+    const fileInput = event.target;
+    const currentFileName = FILE_NAMES[currentTab];
+    
+    if (fileInput.files.length === 0) {
+      return;
+    }
+    
+    const selectedFile = fileInput.files[0];
+    
+    // Проверяем имя файла
+    if (selectedFile.name !== currentFileName) {
+      showStatusMessage(`Выбран файл ${selectedFile.name}, но для текущей вкладки ожидается ${currentFileName}. Файл будет обработан, но убедитесь, что вы выбрали правильный файл.`, true);
+    }
+    
+    // Читаем содержимое файла
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const fileContent = e.target.result;
+      
+      // Сохраняем содержимое файла в глобальную переменную для последующего использования
+      window.lastSelectedFileContent = fileContent;
+      window.lastSelectedFileName = selectedFile.name;
+      
+      // Показываем сообщение, что файл загружен и готов к обработке
+      showStatusMessage(`Файл ${selectedFile.name} загружен и готов к обработке. Нажмите "Компилировать данные", чтобы обновить блоки.`);
+    };
+    reader.onerror = function() {
+      showStatusMessage('Ошибка при чтении файла', true);
+    };
+    reader.readAsText(selectedFile);
+  }
+  
+  // Функция для отображения опции использования BAT-файла
+  function showBatchFileOption() {
+    let batchInfoDiv = document.getElementById('batch-file-option');
+    if (!batchInfoDiv) {
+      batchInfoDiv = document.createElement('div');
+      batchInfoDiv.id = 'batch-file-option';
+      batchInfoDiv.className = 'batch-file-option';
+      batchInfoDiv.innerHTML = `
+        <h3>Использование локального редактирования файлов</h3>
+        <p>Для работы с файлами вы можете:</p>
+        <ol>
+          <li>Скачать и запустить BAT-файл, который создаст необходимую структуру папок</li>
+          <li>Поместить файлы Ruby в созданную папку Decompiled</li>
+          <li>Экспортировать текущие данные и использовать их для обновления файлов</li>
+        </ol>
+        <div class="batch-actions">
+          <button id="generate-batch-btn" class="batch-btn">Сгенерировать BAT-файл</button>
+          <button id="export-data-btn" class="batch-btn">Экспортировать данные</button>
+        </div>
+      `;
+      
+      document.querySelector('.container').insertAdjacentElement('afterend', batchInfoDiv);
+      
+      // Добавляем стили для нового раздела
+      const styleElement = document.createElement('style');
+      styleElement.textContent = `
+        .batch-file-option {
+          margin: 20px auto;
+          padding: 15px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #f8f9fa;
+          max-width: 800px;
+        }
+        .batch-actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 15px;
+        }
+        .batch-btn {
+          padding: 8px 16px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .batch-btn:hover {
+          background-color: #388E3C;
+        }
+      `;
+      document.head.appendChild(styleElement);
+      
+      // Добавляем обработчики событий
+      document.getElementById('generate-batch-btn').addEventListener('click', generateBatchFile);
+      document.getElementById('export-data-btn').addEventListener('click', exportCurrentData);
+    } else {
+      batchInfoDiv.style.display = 'block';
+    }
+  }
+  
+  // Функция для скрытия опции использования BAT-файла
+  function hideBatchFileOption() {
+    const batchInfoDiv = document.getElementById('batch-file-option');
+    if (batchInfoDiv) {
+      batchInfoDiv.style.display = 'none';
+    }
+  }
+  
+  // Функция для генерации BAT-файла
+  function generateBatchFile() {
+    // Содержимое BAT-файла
+    const batchContent = `@echo off
+echo ==============================================
+echo Создание структуры папок и файлов для RB_Script
+echo ==============================================
+
+:: Проверяем и создаем папку Decompiled
+if not exist "Decompiled" (
+  echo Создаем папку Decompiled...
+  mkdir "Decompiled"
+) else (
+  echo Папка Decompiled уже существует.
+)
+
+echo.
+echo Папка Decompiled создана/проверена.
+echo.
+echo Следующие шаги:
+echo 1. Скопируйте файлы "201 - Library(Enemy).rb", "197 - JobChange.rb" и "204 - Library(Medal).rb" в папку Decompiled
+echo 2. В браузере экспортируйте данные для обновления файлов
+echo 3. Используйте экспортированные данные для модификации файлов
+echo.
+echo Нажмите любую клавишу для завершения...
+pause > nul
+`;
+
+    // Создаем ссылку для скачивания
+    const blob = new Blob([batchContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'setup_rb_script_folders.bat';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showStatusMessage('BAT-файл успешно сгенерирован и скачан');
+  }
+  
+  // Функция для экспорта текущих данных
+  function exportCurrentData() {
+    try {
+      // Получаем текущие данные из вывода
+      const outputContent = document.getElementById('output-content').textContent;
+      if (!outputContent.trim()) {
+        showStatusMessage('Нет данных для экспорта', true);
+        return;
+      }
+      
+      // Определяем имя файла в зависимости от вкладки
+      let fileName;
+      switch (currentTab) {
+        case 'library':
+          fileName = 'library_enemy_data.txt';
+          break;
+        case 'jobchange':
+          fileName = 'jobchange_data.txt';
+          break;
+        case 'medal':
+          fileName = 'medal_data.txt';
+          break;
+        default:
+          fileName = 'exported_data.txt';
+      }
+      
+      // Создаем инструкцию по использованию
+      const instruction = `# Данные для обновления файла ${FILE_NAMES[currentTab]}
+# Скопируйте эти данные и замените соответствующие блоки в файле вручную
+# -----------------------------------------------------------------------
+
+`;
+      const contentWithInstruction = instruction + outputContent;
+      
+      // Создаем ссылку для скачивания
+      const blob = new Blob([contentWithInstruction], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showStatusMessage('Данные успешно экспортированы');
+    } catch (e) {
+      console.error('Ошибка при экспорте данных:', e);
+      showStatusMessage('Ошибка при экспорте данных: ' + e.message, true);
+    }
+  }
+  
+  // Функция для отображения сообщения состояния
+  function showStatusMessage(message, isError = false) {
+    const statusDiv = document.getElementById('status-message') || document.createElement('div');
+    
+    if (!document.getElementById('status-message')) {
+      statusDiv.id = 'status-message';
+      document.querySelector('.controls').appendChild(statusDiv);
+    }
+    
+    statusDiv.textContent = message;
+    statusDiv.className = isError ? 'error' : 'success';
+    statusDiv.style.display = 'block';
+    
+    // Очищаем предыдущий таймер, если он есть
+    if (statusDiv.timerID) {
+      clearTimeout(statusDiv.timerID);
+    }
+    
+    // Автоматически скрыть сообщение через 5 секунд, но только если это не ошибка
+    if (!isError) {
+      statusDiv.timerID = setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 5000);
+    }
+  }
+  
+
+  
+  // Функция для компиляции данных
+  function compileData() {
+    // Получаем данные из окна вывода
+    const outputContent = document.getElementById('output-content').textContent;
+    if (!outputContent.trim()) {
+      showStatusMessage('Нет данных для обновления файла', true);
+      return;
+    }
+    
+    // Проверяем, есть ли содержимое файла в глобальной переменной
+    if (window.lastSelectedFileContent) {
+      // Используем сохраненное содержимое файла
+      updateFileContent(window.lastSelectedFileContent);
+    } else {
+      // Проверяем, выбран ли файл
+      const fileInput = document.getElementById('input-file');
+      if (fileInput && fileInput.files.length > 0) {
+        // Файл выбран, но содержимое еще не обработано
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const fileContent = e.target.result;
+          window.lastSelectedFileContent = fileContent;
+          window.lastSelectedFileName = fileInput.files[0].name;
+          updateFileContent(fileContent);
+        };
+        reader.onerror = function() {
+          showStatusMessage('Ошибка при чтении файла', true);
+        };
+        reader.readAsText(fileInput.files[0]);
+      } else {
+        // Предлагаем пользователю выбрать файл
+        showStatusMessage('Пожалуйста, выберите оригинальный файл для обновления', true);
+        
+        // Делаем поле выбора файла более заметным
+        const fileInputContainer = document.getElementById('file-input-container');
+        if (fileInputContainer) {
+          fileInputContainer.style.border = '2px solid #f44336';
+          fileInputContainer.style.padding = '10px';
+          fileInputContainer.style.borderRadius = '4px';
+          
+          // Убираем выделение через 3 секунды
+          setTimeout(() => {
+            fileInputContainer.style.border = 'none';
+            fileInputContainer.style.padding = '0';
+          }, 3000);
+        }
+      }
+    }
+  }
+  
+  // Функция для обновления содержимого файла
+  function updateFileContent(fileContent) {
+    try {
+      // Получаем данные из окна вывода
+      const outputContent = document.getElementById('output-content').textContent;
+      if (!outputContent.trim()) {
+        showStatusMessage('Нет данных для обновления файла', true);
+        return;
+      }
+      
+      // Обрабатываем в зависимости от текущей вкладки
+      let newContent;
+      switch (currentTab) {
+        case 'library':
+          newContent = updateLibraryFile(fileContent, outputContent);
+          break;
+        case 'jobchange':
+          newContent = updateJobChangeFile(fileContent, outputContent);
+          break;
+        case 'medal':
+          newContent = updateMedalFile(fileContent, outputContent);
+          break;
+        default:
+          showStatusMessage('Неподдерживаемая вкладка для компиляции', true);
+          return;
+      }
+      
+      // Проверяем, были ли изменения
+      if (!newContent) {
+        showStatusMessage('Не найдены блоки для обновления', true);
+        return;
+      }
+      
+      // Создаем ссылку для скачивания обновленного файла
+      const blob = new Blob([newContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.getElementById('download-link');
+      const downloadContainer = document.getElementById('download-container');
+      
+      if (downloadLink && downloadContainer) {
+        downloadLink.href = url;
+        downloadLink.download = FILE_NAMES[currentTab];
+        downloadContainer.style.display = 'block';
+        
+        showStatusMessage('Файл успешно обновлен. Скачайте его и замените оригинальный файл в папке Decompiled.');
+      } else {
+        showStatusMessage('Ошибка: не найдена ссылка для скачивания', true);
+      }
+    } catch (e) {
+      console.error('Ошибка при обновлении содержимого файла:', e);
+      showStatusMessage(`Ошибка при обновлении файла: ${e.message}`, true);
+    }
+  }
+  
+  // Функция для обновления файла Library(Enemy)
+  function updateLibraryFile(originalContent, newBlocks) {
+    try {
+      // Парсим новые блоки
+      const blocks = parseLibraryBlocks(newBlocks);
+      if (blocks.length === 0) {
+        showStatusMessage('Не найдены блоки для обновления', true);
+        return null;
+      }
+      
+      let updatedContent = originalContent;
+      
+      // Обновляем каждый блок
+      blocks.forEach(block => {
+        const id = block.id;
+        const content = block.content;
+        
+        // Ищем блок с таким ID в оригинальном файле
+        const regex = new RegExp(`${id}\\s*=>\\s*\\[([^\\]]*?)\\],`, 's');
+        const match = updatedContent.match(regex);
+        
+        if (match) {
+          // Блок найден, заменяем его
+          updatedContent = updatedContent.replace(regex, content);
+        } else {
+          // Блок не найден, добавляем новый блок в конец
+          // Находим последний блок
+          const lastBlockMatch = updatedContent.match(/(\d+)\s*=>\s*\[([^\]]*?)\],\s*$/s);
+          if (lastBlockMatch) {
+            const position = lastBlockMatch.index + lastBlockMatch[0].length;
+            updatedContent = updatedContent.substring(0, position) + "\n" + content + 
+                             updatedContent.substring(position);
+          } else {
+            // Если не нашли последний блок, добавляем в конец файла
+            updatedContent += "\n" + content;
+          }
+        }
+      });
+      
+      return updatedContent;
+    } catch (e) {
+      console.error('Ошибка при обновлении Library файла:', e);
+      showStatusMessage('Ошибка при обновлении Library файла', true);
+      return null;
+    }
+  }
+  
+  // Функция для обновления файла JobChange
+  function updateJobChangeFile(originalContent, newBlocks) {
+    try {
+      // Парсим новые блоки
+      const blocks = parseJobChangeBlocks(newBlocks);
+      if (blocks.length === 0) {
+        showStatusMessage('Не найдены блоки для обновления', true);
+        return null;
+      }
+      
+      let updatedContent = originalContent;
+      
+      // Обновляем каждый блок
+      blocks.forEach(block => {
+        const id = block.id;
+        const content = block.content;
+        
+        // Ищем блок с таким ID в оригинальном файле
+        const regex = new RegExp(`\\s*${id}\\s*=>.*?\\]\\],`, 's');
+        const match = updatedContent.match(regex);
+        
+        if (match) {
+          // Блок найден, заменяем его
+          updatedContent = updatedContent.replace(regex, content);
+        } else {
+          // Блок не найден, добавляем новый блок в конец
+          // Находим последний блок
+          const lastBlockMatch = updatedContent.match(/(\d+)\s*=>.*?\]\],\s*$/s);
+          if (lastBlockMatch) {
+            const position = lastBlockMatch.index + lastBlockMatch[0].length;
+            updatedContent = updatedContent.substring(0, position) + "\n" + content + 
+                             updatedContent.substring(position);
+          } else {
+            // Если не нашли последний блок, добавляем в конец файла
+            updatedContent += "\n" + content;
+          }
+        }
+      });
+      
+      return updatedContent;
+    } catch (e) {
+      console.error('Ошибка при обновлении JobChange файла:', e);
+      showStatusMessage('Ошибка при обновлении JobChange файла', true);
+      return null;
+    }
+  }
+  
+  // Функция для обновления файла Medal
+  function updateMedalFile(originalContent, newBlocks) {
+    try {
+      // Парсим новые блоки
+      const blocks = parseMedalBlocks(newBlocks);
+      if (blocks.length === 0) {
+        showStatusMessage('Не найдены блоки для обновления', true);
+        return null;
+      }
+      
+      let updatedContent = originalContent;
+      
+      // Обновляем каждый блок
+      blocks.forEach(block => {
+        const id = block.id;
+        const content = block.content;
+        
+        // Ищем блок с таким ID в оригинальном файле с учетом форматирования
+        const regex = new RegExp(`\\s*${id}\\s*=>\\s*\\{[^}]*?\\},`, 's');
+        const match = updatedContent.match(regex);
+        
+        if (match) {
+          // Получаем контекст блока и его отступы
+          const blockContext = match[0];
+          
+          // Определяем, с новой ли строки начинался оригинальный блок
+          const startsWithNewline = /^\s*\n\s*\d+\s*=>/m.test(blockContext);
+          
+          // Определяем отступ перед началом блока
+          const indentMatch = blockContext.match(/^(\s*)/);
+          const indent = indentMatch ? indentMatch[1] : '';
+          
+          // Обрабатываем новый контент, сохраняя форматирование
+          let formattedContent = content;
+          
+          // Добавляем отступ в начало, если он был
+          if (indent && !formattedContent.startsWith(indent)) {
+            formattedContent = indent + formattedContent.trimStart();
+          }
+          
+          // Добавляем перенос строки перед блоком, если он был
+          if (startsWithNewline && !formattedContent.startsWith('\n')) {
+            formattedContent = '\n' + formattedContent;
+          }
+          
+          // Заменяем блок с учетом форматирования
+          updatedContent = updatedContent.replace(regex, formattedContent);
+        } else {
+          // Блок не найден, добавляем новый блок в конец
+          // Находим последний блок
+          const lastBlockMatch = updatedContent.match(/(\d+)\s*=>\s*\{[^}]*?\},\s*$/s);
+          if (lastBlockMatch) {
+            const position = lastBlockMatch.index + lastBlockMatch[0].length;
+            
+            // Определяем, был ли перенос строки перед последним блоком
+            const lastBlockStart = updatedContent.lastIndexOf('\n', lastBlockMatch.index);
+            const lastBlockPrefix = updatedContent.substring(lastBlockStart + 1, lastBlockMatch.index);
+            const indentLevel = lastBlockPrefix.match(/^\s*/)[0];
+            
+            // Добавляем блок с тем же форматированием, что и последний блок
+            const newBlockContent = '\n' + indentLevel + content;
+            updatedContent = updatedContent.substring(0, position) + newBlockContent + 
+                             updatedContent.substring(position);
+          } else {
+            // Если не нашли последний блок, добавляем в конец файла
+            updatedContent += '\n    ' + content;
+          }
+        }
+      });
+      
+      return updatedContent;
+    } catch (e) {
+      console.error('Ошибка при обновлении Medal файла:', e);
+      showStatusMessage('Ошибка при обновлении Medal файла', true);
+      return null;
+    }
+  }
+  
+  // Функция для парсинга блоков Library
+  function parseLibraryBlocks(content) {
+    const blocks = [];
+    const regex = /(\d+)\s*=>\s*\[([\s\S]*?)\],/g;
+    
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      blocks.push({
+        id: match[1].trim(),
+        content: match[0]
+      });
+    }
+    
+    return blocks;
+  }
+  
+  // Функция для парсинга блоков JobChange
+  function parseJobChangeBlocks(content) {
+    const blocks = [];
+    const regex = /\s*(\d+)\s*=>\s*.*?\[\[([\s\S]*?)\]\],/g;
+    
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      blocks.push({
+        id: match[1].trim(),
+        content: match[0]
+      });
+    }
+    
+    return blocks;
+  }
+  
+  // Функция для парсинга блоков Medal
+  function parseMedalBlocks(content) {
+    const blocks = [];
+    const regex = /\s*(\d+)\s*=>\s*\{([\s\S]*?)\},/g;
+    
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      blocks.push({
+        id: match[1].trim(),
+        content: match[0]
+      });
+    }
+    
+    return blocks;
   }
 
   // Единая функция изменения длины строки, учитывающая текущую вкладку
@@ -1348,7 +2089,7 @@
           const result = replaceSkills(mainText, skillMap);
           console.log("Обработка завершена, обновляем поле ввода...");
           inputData.value = result;
-          updateOutput();
+          alert('Обработка успешно завершена!');
         } catch (err) {
           console.error("Ошибка при обработке: ", err);
           alert('Ошибка обработки файла Skills: ' + err.message);
