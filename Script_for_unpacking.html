@@ -34,6 +34,7 @@
     <div class="tabs">
         <button class="tab-btn active" data-tab="jobchange">JobChange</button>
         <button class="tab-btn" data-tab="library">Library(Enemy)</button>
+        <button class="tab-btn" data-tab="medal">Library(Medal)</button>
     </div>
 
     <div class="container">
@@ -139,6 +140,35 @@
                 };
 
                 return records.map(record => processRecord(record)).join("\n\n");
+            },
+            medal: function(input) {
+                // Разбиваем входной текст на записи, где каждая начинается с числа и стрелки "=>"
+                const entries = input.split(/(?=^\s*\d+\s*=>)/m)
+                                     .map(e => e.trim())
+                                     .filter(e => e.length > 0);
+                
+                return entries.map(entry => {
+                    // Извлекаем номер записи и начало структуры
+                    const headerMatch = entry.match(/^(\s*\d+\s*=>\s*\{)/);
+                    if (!headerMatch) return "Ошибка: неверный формат заголовка";
+                    
+                    // Извлекаем значения полей
+                    const iconMatch = entry.match(/:icon_id\s*=>\s*(\d+),/);
+                    const titleMatch = entry.match(/:title\s*=>\s*"([^"]+)",/);
+                    const descMatch = entry.match(/:description\s*=>\s*"([^"]+)",/);
+                    const priorityMatch = entry.match(/:priority\s*=>\s*(\d+),/);
+                    
+                    if (!titleMatch || !descMatch) return entry; // Если не можем найти оба поля, возвращаем без изменений
+                    
+                    // Формируем результат в новом формате
+                    let result = headerMatch[1] + "\n";
+                    if (iconMatch) result += "      :icon_id => " + iconMatch[1] + ",\n";
+                    result += titleMatch[1] + "\n" + descMatch[1] + "\n";
+                    if (priorityMatch) result += "      :priority => " + priorityMatch[1] + ",\n";
+                    result += "},";
+                    
+                    return result;
+                }).join("\n\n");
             }
         };
 
