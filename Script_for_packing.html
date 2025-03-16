@@ -90,6 +90,7 @@
     <div class="tabs">
         <button class="tab-btn active" data-mode="library">Library(Enemy)</button>
         <button class="tab-btn" data-mode="jobchange">JobChange</button>
+        <button class="tab-btn" data-mode="medal">Library(Medal)</button>
         <button class="tab-btn" data-mode="skillreplacer">Skill Replacer</button>
     </div>
 
@@ -197,7 +198,7 @@
   document.getElementById('increase-length').addEventListener('click', () => adjustLength(1));
   document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
   
-// Явно добавляем обработчик для кнопки Skill Replacer
+  // Явно добавляем обработчик для кнопки Skill Replacer
   document.getElementById('process-skill-btn').addEventListener('click', processSkillReplacer);
 
   // Функция копирования в буфер
@@ -251,6 +252,8 @@
         output = processText(inputText);
       } else if (currentTab === "jobchange") {
         output = processJobChangeText(inputText);
+      } else if (currentTab === "medal") {
+        output = processMedalText(inputText);
       } else if (currentTab === "skillreplacer") {
         // Для вкладки Skill Replacer не выполняем автоматическую обработку
         return;
@@ -261,6 +264,131 @@
       document.getElementById('output-content').textContent = 'Ошибка форматирования';
       console.error("Error in updateOutput:", e);
     }
+  }
+
+  // Новая функция для обработки текста медалей
+  function processMedalText(text) {
+    try {
+      const lines = text.split('\n');
+      let result = "";
+      let currentId = null;
+      let currentIconId = null;
+      let currentPriority = null;
+      let japTitle = null;
+      let japDescription = null;
+      let rusTitle = null;
+      let rusDescription = null;
+      let collectingJap = false;
+      let collectingRus = false;
+      
+      // Проходим по всем строкам текста
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Пропускаем пустые строки
+        if (!line) continue;
+        
+        // Проверяем, начинается ли строка с ID медали
+        const idMatch = line.match(/^(\d+)\s*=>\s*\{/);
+        if (idMatch) {
+          // Если у нас уже есть данные о медали, добавляем их в результат
+          if (currentId !== null) {
+            // В зависимости от выбранного языка, используем соответствующие данные
+            const title = currentMode === "JAP" ? japTitle : rusTitle;
+            const description = currentMode === "JAP" ? japDescription : rusDescription;
+            
+            if (title && description) {
+              result += formatMedal(currentId, currentIconId, title, description, currentPriority);
+            }
+          }
+          
+          // Начинаем сбор данных для новой медали
+          currentId = idMatch[1];
+          collectingJap = false;
+          collectingRus = false;
+          japTitle = null;
+          japDescription = null;
+          rusTitle = null;
+          rusDescription = null;
+          continue;
+        }
+        
+        // Ищем icon_id
+        const iconIdMatch = line.match(/:icon_id\s*=>\s*(\d+)/);
+        if (iconIdMatch) {
+          currentIconId = iconIdMatch[1];
+          continue;
+        }
+        
+        // Ищем priority
+        const priorityMatch = line.match(/:priority\s*=>\s*(\d+)/);
+        if (priorityMatch) {
+          currentPriority = priorityMatch[1];
+          continue;
+        }
+        
+        // Проверка на конец блока медали
+        if (line === "},") {
+          collectingJap = false;
+          collectingRus = true; // После закрывающей скобки идет русское название
+          continue;
+        }
+        
+        // Если мы не в режиме сбора японского текста, и строка не совпадает с паттернами выше,
+        // и мы еще не собрали японский заголовок
+        if (!collectingJap && !collectingRus && japTitle === null && 
+            !iconIdMatch && !priorityMatch && line !== "},") {
+          collectingJap = true;
+        }
+        
+        // Сбор японского текста
+        if (collectingJap) {
+          if (japTitle === null) {
+            japTitle = line;
+          } else if (japDescription === null) {
+            japDescription = line;
+            collectingJap = false;
+          }
+          continue;
+        }
+        
+        // Сбор русского текста
+        if (collectingRus) {
+          if (rusTitle === null) {
+            rusTitle = line;
+          } else if (rusDescription === null) {
+            rusDescription = line;
+            collectingRus = false;
+          }
+          continue;
+        }
+      }
+      
+      // Добавляем последнюю медаль, если есть данные
+      if (currentId !== null) {
+        const title = currentMode === "JAP" ? japTitle : rusTitle;
+        const description = currentMode === "JAP" ? japDescription : rusDescription;
+        
+        if (title && description) {
+          result += formatMedal(currentId, currentIconId, title, description, currentPriority);
+        }
+      }
+      
+      return result;
+    } catch (e) {
+      console.error("Error in processMedalText:", e);
+      return "Error processing medal text: " + e.message;
+    }
+  }
+  
+  // Функция форматирования медали
+  function formatMedal(id, iconId, title, description, priority) {
+    return `    ${id} => {
+      :icon_id => ${iconId},
+      :title => "${title}",
+      :description => "${description}",
+      :priority => ${priority},
+    },\n`;
   }
 
   // Function to detect input content that contains wide spaces
