@@ -199,7 +199,8 @@
   const FILE_NAMES = {
     "library": "201 - Library(Enemy).rb",
     "jobchange": "197 - JobChange.rb",
-    "medal": "204 - Library(Medal).rb"
+    "medal": "204 - Library(Medal).rb",
+    "skillreplacer": "Skills.txt"
   };
   
   // Глобальные переменные для хранения информации о выбранном файле
@@ -436,7 +437,22 @@
     
     // Проверяем имя файла
     if (selectedFile.name !== currentFileName) {
-      showStatusMessage(`Выбран файл ${selectedFile.name}, но для текущей вкладки ожидается ${currentFileName}. Файл будет обработан, но убедитесь, что вы выбрали правильный файл.`, true);
+      // Проверяем, соответствует ли файл хотя бы типу текущей вкладки
+      let isCompatible = false;
+      
+      if (currentTab === "library" && selectedFile.name.includes("Library(Enemy)")) {
+        isCompatible = true;
+      } else if (currentTab === "jobchange" && selectedFile.name.includes("JobChange")) {
+        isCompatible = true;
+      } else if (currentTab === "medal" && selectedFile.name.includes("Library(Medal)")) {
+        isCompatible = true;
+      }
+      
+      if (isCompatible) {
+        showStatusMessage(`Выбран файл ${selectedFile.name}, который соответствует текущей вкладке. Файл будет обработан.`);
+      } else {
+        showStatusMessage(`Выбран файл ${selectedFile.name}, но для текущей вкладки ожидается ${currentFileName}. Убедитесь, что вы выбрали правильный файл.`, true);
+      }
     }
     
     // Читаем содержимое файла
@@ -444,12 +460,28 @@
     reader.onload = function(e) {
       const fileContent = e.target.result;
       
-      // Сохраняем содержимое файла в глобальную переменную для последующего использования
-      window.lastSelectedFileContent = fileContent;
-      window.lastSelectedFileName = selectedFile.name;
+      // Дополнительная проверка содержимого файла
+      let isValid = true;
       
-      // Показываем сообщение, что файл загружен и готов к обработке
-      showStatusMessage(`Файл ${selectedFile.name} загружен и готов к обработке. Нажмите "Компилировать данные", чтобы обновить блоки.`);
+      if (currentTab === "library" && !fileContent.includes("ENEMY_DESCRIPTION")) {
+        isValid = false;
+        showStatusMessage('Файл не содержит ENEMY_DESCRIPTION и не может быть использован для вкладки Library', true);
+      } else if (currentTab === "jobchange" && !fileContent.includes("JOB_DESC_TEXT")) {
+        isValid = false;
+        showStatusMessage('Файл не содержит JOB_DESC_TEXT и не может быть использован для вкладки JobChange', true);
+      } else if (currentTab === "medal" && !fileContent.includes("MEDAL_DESCRIPTION")) {
+        isValid = false;
+        showStatusMessage('Файл не содержит MEDAL_DESCRIPTION и не может быть использован для вкладки Medal', true);
+      }
+      
+      if (isValid) {
+        // Сохраняем содержимое файла в глобальную переменную для последующего использования
+        window.lastSelectedFileContent = fileContent;
+        window.lastSelectedFileName = selectedFile.name;
+        
+        // Показываем сообщение, что файл загружен и готов к обработке
+        showStatusMessage(`Файл ${selectedFile.name} загружен и готов к обработке. Нажмите "Компилировать данные", чтобы обновить блоки.`);
+      }
     };
     reader.onerror = function() {
       showStatusMessage('Ошибка при чтении файла', true);
@@ -705,6 +737,18 @@ pause > nul
       const outputContent = document.getElementById('output-content').textContent;
       if (!outputContent.trim()) {
         showStatusMessage('Нет данных для обновления файла', true);
+        return;
+      }
+      
+      // Проверяем соответствие файла текущей вкладке
+      if (currentTab === 'library' && !fileContent.includes('ENEMY_DESCRIPTION')) {
+        showStatusMessage('Выбранный файл не содержит ENEMY_DESCRIPTION и не может быть использован для вкладки Library', true);
+        return;
+      } else if (currentTab === 'jobchange' && !fileContent.includes('JOB_DESC_TEXT')) {
+        showStatusMessage('Выбранный файл не содержит JOB_DESC_TEXT и не может быть использован для вкладки JobChange', true);
+        return;
+      } else if (currentTab === 'medal' && !fileContent.includes('MEDAL_DESCRIPTION')) {
+        showStatusMessage('Выбранный файл не содержит MEDAL_DESCRIPTION и не может быть использован для вкладки Medal', true);
         return;
       }
       
@@ -1180,39 +1224,133 @@ pause > nul
         return null;
       }
       
-      let updatedContent = originalContent;
+      console.log(`Найдено ${blocks.length} блоков для обновления JobChange`);
+      
+      // Найдем словарь JOB_DESC_TEXT в файле
+      const jobDictMatch = originalContent.match(/JOB_DESC_TEXT\s*=\s*{/);
+      if (!jobDictMatch) {
+        console.error("Не найден словарь JOB_DESC_TEXT в файле JobChange");
+        showStatusMessage('Не найден словарь JOB_DESC_TEXT в файле', true);
+        return null;
+      }
+      
+      // Ищем начало и конец словаря
+      const dictStartIndex = jobDictMatch.index;
+      
+      // Найдем конец словаря (последнюю закрывающую скобку перед "}")
+      const dictEndMatch = originalContent.substring(dictStartIndex).match(/}\s*$/m);
+      if (!dictEndMatch) {
+        console.error("Не найден конец словаря JOB_DESC_TEXT");
+        showStatusMessage('Не найден конец словаря JOB_DESC_TEXT', true);
+        return null;
+      }
+      
+      // Получаем часть файла до и после словаря
+      const beforeDict = originalContent.substring(0, dictStartIndex);
+      const afterDict = originalContent.substring(dictStartIndex + dictEndMatch.index + dictEndMatch[0].length);
+      
+      // Извлекаем содержимое словаря
+      const dictContent = originalContent.substring(
+        dictStartIndex, 
+        dictStartIndex + dictEndMatch.index + dictEndMatch[0].length
+      );
+      
+      // Найдем структуру начала словаря, чтобы сформировать правильный первый блок
+      const dictHeaderMatch = dictContent.match(/JOB_DESC_TEXT\s*=\s*{(\s*\n*)/);
+      const dictIndent = dictHeaderMatch && dictHeaderMatch[1] ? dictHeaderMatch[1] : '\n  ';
+      
+      let updatedDictContent = dictContent;
       
       // Обновляем каждый блок
-      blocks.forEach(block => {
+      let updatedCount = 0;
+      let newCount = 0;
+      
+      // Особая обработка для блока с ID=1
+      const firstBlock = blocks.find(b => b.id === "1");
+      if (firstBlock) {
+        // Ищем блок ID=1 в словаре
+        const block1Regex = /(\s*)1\s*=>\s*(?:#[^\n]*)?(?:\s*\n\s*)?\[\[([\s\S]*?)\]\],/s;
+        const block1Match = updatedDictContent.match(block1Regex);
+        
+        if (block1Match) {
+          // Получаем оригинальное содержимое блока ID=1 и форматируем новый блок точно также
+          const originalIndent = block1Match[1];
+          
+          // Форматируем первый блок согласно образцу
+          const formattedBlock1 = `${originalIndent}1 => ${firstBlock.content.includes('#') ? firstBlock.content.split('#')[1].trim() : ''}\n      [[\n` +
+            firstBlock.content.split('[[')[1].split(']]')[0] + 
+            `\n      ]],`;
+          
+          // Заменяем блок в словаре
+          updatedDictContent = updatedDictContent.replace(block1Match[0], formattedBlock1);
+          updatedCount++;
+          console.log(`Обновлен первый блок (ID=1) с сохранением оригинального форматирования`);
+          
+          // Удаляем блок из списка, так как мы уже его обработали
+          blocks.splice(blocks.findIndex(b => b.id === "1"), 1);
+        } else {
+          // Если первый блок не найден, добавляем его в начало словаря
+          const dictStartWithBrace = updatedDictContent.indexOf('{') + 1;
+          const formattedBlock1 = `${dictIndent}1 => ${firstBlock.content.includes('#') ? '#' + firstBlock.content.split('#')[1].trim() : ''}\n      [[\n` +
+            firstBlock.content.split('[[')[1].split(']]')[0] + 
+            `\n      ]],`;
+          
+          updatedDictContent = 
+            updatedDictContent.substring(0, dictStartWithBrace) + 
+            formattedBlock1 + 
+            updatedDictContent.substring(dictStartWithBrace);
+          
+          newCount++;
+          console.log(`Добавлен первый блок (ID=1) с правильным форматированием`);
+          
+          // Удаляем блок из списка, так как мы уже его обработали
+          blocks.splice(blocks.findIndex(b => b.id === "1"), 1);
+        }
+      }
+      
+      // Обновляем все остальные блоки
+      blocks.forEach((block, index) => {
         const id = block.id;
         const content = block.content;
         
-        // Ищем блок с таким ID в оригинальном файле
-        const regex = new RegExp(`\\s*${id}\\s*=>.*?\\]\\],`, 's');
-        const match = updatedContent.match(regex);
+        // Ищем блок с таким ID в словаре (учитываем разные форматирования)
+        const blockRegex = new RegExp(`(?:^|\\s+)${id}\\s*=>.*?\\]\\],`, 's');
+        const match = updatedDictContent.match(blockRegex);
         
         if (match) {
           // Блок найден, заменяем его
-          updatedContent = updatedContent.replace(regex, content);
+          updatedDictContent = updatedDictContent.replace(match[0], content);
+          updatedCount++;
+          console.log(`Обновлен блок ID ${id}`);
         } else {
-          // Блок не найден, добавляем новый блок в конец
-          // Находим последний блок
-          const lastBlockMatch = updatedContent.match(/(\d+)\s*=>.*?\]\],\s*$/s);
-          if (lastBlockMatch) {
-            const position = lastBlockMatch.index + lastBlockMatch[0].length;
-            updatedContent = updatedContent.substring(0, position) + "\n" + content + 
-                             updatedContent.substring(position);
+          // Блок не найден, добавляем новый блок перед концом словаря
+          const lastBraceIndex = updatedDictContent.lastIndexOf('}');
+          if (lastBraceIndex !== -1) {
+            updatedDictContent = 
+              updatedDictContent.substring(0, lastBraceIndex) + 
+              "\n    " + content + "\n" + 
+              updatedDictContent.substring(lastBraceIndex);
+            newCount++;
+            console.log(`Добавлен новый блок ID ${id}`);
           } else {
-            // Если не нашли последний блок, добавляем в конец файла
-            updatedContent += "\n" + content;
+            // Странная ситуация, но пробуем добавить в конец
+            updatedDictContent += "\n    " + content;
+            newCount++;
+            console.log(`Добавлен новый блок ID ${id} в конец словаря`);
           }
         }
       });
       
+      console.log(`Обновлено блоков: ${updatedCount}, добавлено новых: ${newCount}`);
+      
+      // Собираем обновленный файл
+      const updatedContent = beforeDict + updatedDictContent + afterDict;
+      showStatusMessage(`Обновлено блоков JobChange: ${updatedCount}, добавлено новых: ${newCount}`);
+      
       return updatedContent;
     } catch (e) {
       console.error('Ошибка при обновлении JobChange файла:', e);
-      showStatusMessage('Ошибка при обновлении JobChange файла', true);
+      showStatusMessage('Ошибка при обновлении JobChange файла: ' + e.message, true);
       return null;
     }
   }
@@ -1449,17 +1587,112 @@ pause > nul
   // Функция для парсинга блоков JobChange
   function parseJobChangeBlocks(content) {
     const blocks = [];
-    const regex = /\s*(\d+)\s*=>\s*.*?\[\[([\s\S]*?)\]\],/g;
-    
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      blocks.push({
-        id: match[1].trim(),
-        content: match[0]
-      });
+    try {
+      console.log("Начинаем парсинг блоков JobChange...");
+      
+      // Ищем все блоки с ID по шаблону
+      // Учитываем несколько вариантов форматирования, в том числе и отсутствие отступов
+      const regex = /(?:^|\s+)(\d+)\s*=>\s*(?:#.*\n)?\s*\[\[\s*[\s\S]*?\]\s*\],\s*\[\s*[\s\S]*?\]\s*\]\s*\],/g;
+      
+      let match;
+      let count = 0;
+      while ((match = regex.exec(content)) !== null) {
+        count++;
+        const id = match[1].trim();
+        const fullMatch = match[0].trimStart(); // Убираем начальные пробелы
+        
+        // Проверяем корректность блока
+        if (!fullMatch.endsWith('],')) {
+          console.warn(`Блок ID ${id} имеет неправильный формат окончания`);
+          continue;
+        }
+        
+        blocks.push({
+          id: id,
+          content: fullMatch
+        });
+        
+        if (count <= 3 || blocks.length <= 3) {
+          console.log(`Найден блок ID: ${id}, длина: ${fullMatch.length} символов`);
+          // Выводим первые 50 символов для диагностики
+          console.log(`Начало блока: "${fullMatch.substring(0, 50).replace(/\n/g, '\\n')}..."`);
+        }
+      }
+      
+      console.log(`Всего найдено блоков: ${blocks.length} из ${count} совпадений`);
+      
+      // Если блоки не найдены, попробуем альтернативное регулярное выражение
+      if (blocks.length === 0) {
+        console.log("Пробуем альтернативный метод поиска блоков...");
+        const altRegex = /(?:^|\s+)(\d+)\s*=>[^[]*\[\[([\s\S]*?)\]\],/g;
+        
+        while ((match = altRegex.exec(content)) !== null) {
+          const id = match[1].trim();
+          const fullMatch = match[0].trimStart(); // Убираем начальные пробелы
+          
+          blocks.push({
+            id: id,
+            content: fullMatch
+          });
+          
+          console.log(`Альтернативный метод: найден блок ID: ${id}`);
+        }
+        
+        console.log(`Альтернативный метод: найдено блоков: ${blocks.length}`);
+      }
+      
+      // Если все еще не нашли блоки, используем самый простой подход
+      if (blocks.length === 0) {
+        console.log("Пробуем самый простой подход - поиск строк с ID...");
+        
+        // Разбиваем контент на строки
+        const lines = content.split('\n');
+        let currentBlock = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          const originalLine = lines[i]; // Сохраняем оригинальное форматирование
+          
+          // Проверяем, является ли строка началом блока
+          const idMatch = line.match(/^(\d+)\s*=>/);
+          
+          if (idMatch) {
+            // Если у нас уже был блок, добавляем его в результат
+            if (currentBlock) {
+              blocks.push(currentBlock);
+            }
+            
+            // Создаем новый блок
+            const id = idMatch[1];
+            currentBlock = {
+              id: id,
+              content: originalLine
+            };
+          } else if (currentBlock) {
+            // Добавляем строку к текущему блоку
+            currentBlock.content += '\n' + originalLine;
+            
+            // Проверяем, является ли эта строка концом блока
+            if (line === "]],") {
+              blocks.push(currentBlock);
+              currentBlock = null;
+            }
+          }
+        }
+        
+        // Добавляем последний блок, если он есть
+        if (currentBlock) {
+          blocks.push(currentBlock);
+        }
+        
+        console.log(`Простой подход: найдено блоков: ${blocks.length}`);
+      }
+      
+      return blocks;
+    } catch (e) {
+      console.error(`Ошибка при парсинге блоков JobChange: ${e.message}`);
+      return blocks; // Возвращаем то, что успели найти
     }
-    
-    return blocks;
   }
   
   // Функция для парсинга блоков Medal
@@ -1893,8 +2126,16 @@ pause > nul
       
       if (currentBlock) blocks.push(currentBlock);
       
+      // Проверка на пустые блоки
+      if (blocks.length === 0) {
+        console.warn("Предупреждение: не найдено ни одного блока в тексте");
+        return "Ошибка: не найдено ни одного блока. Убедитесь, что текст содержит ID классов в формате '123 # Название класса'";
+      }
+      
+      console.log(`Найдено ${blocks.length} блоков для обработки`);
+      
       let result = "";
-      blocks.forEach(block => {
+      blocks.forEach((block, index) => {
         // Skip blocks without matching language characters if needed
         let blockText = block.header + "\n" + 
                        block.description.join("\n") + "\n" +
@@ -1910,48 +2151,83 @@ pause > nul
         let id = headerParts[0].trim();
         let title = headerParts.length > 1 ? '# ' + headerParts[1].trim() : '';
         
-        // Format description
-        let formattedDescription = [];
-        if (block.description.length > 0) {
-          let descText = block.description.join(' ');
-          formattedDescription = wrapText(descText, 
-                                          currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength(), 
-                                          currentMode);
+        // Особая обработка для первого блока (ID=1)
+        if (id === "1") {
+          result += `    ${id} => ${title}\n      [[\n`;
+          
+          // Description section
+          let formattedDescription = [];
+          if (block.description.length > 0) {
+            let descText = block.description.join(' ');
+            formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
+          }
+          
+          formattedDescription.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          // Section separator
+          result += `    ],\n    [\n`;
+          
+          // Equipment, skills and abilities sections
+          const maxLen = maxLineLengthJobChangeVar;
+          let formattedEquipment = formatWithWideSpaces("Экипировка:", block.equipment, maxLen);
+          let formattedSkills = formatWithWideSpaces("Навыки:", block.skills, maxLen);
+          let formattedAbilities = formatAbilitiesSection(block.abilities, maxLen);
+          
+          formattedEquipment.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          formattedSkills.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          formattedAbilities.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          result += `      ]],\n`;
+        } else {
+          // Обработка для всех остальных блоков (кроме ID=1)
+          // Build result with proper indentation
+          result += `    ${id} => ${title}\n      [[\n`;
+          
+          // Format description
+          let formattedDescription = [];
+          if (block.description.length > 0) {
+            let descText = block.description.join(' ');
+            formattedDescription = wrapText(descText, maxLineLengthJobChangeVar, currentMode);
+          }
+          
+          // Description section
+          formattedDescription.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          // Section separator
+          result += `    ],\n    [\n`;
+          
+          // Equipment, skills and abilities sections
+          const maxLen = maxLineLengthJobChangeVar;
+          let formattedEquipment = formatWithWideSpaces("Экипировка:", block.equipment, maxLen);
+          let formattedSkills = formatWithWideSpaces("Навыки:", block.skills, maxLen);
+          let formattedAbilities = formatAbilitiesSection(block.abilities, maxLen);
+          
+          formattedEquipment.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          formattedSkills.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          formattedAbilities.forEach(line => {
+            result += `        "${escapeQuotes(line)}",\n`;
+          });
+          
+          result += `      ]],\n`;
         }
-        
-        // Format all sections
-        const maxLen = currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength();
-        let formattedEquipment = formatWithWideSpaces("Экипировка:", block.equipment, maxLen);
-        let formattedSkills = formatWithWideSpaces("Навыки:", block.skills, maxLen);
-        
-        // Special processing for abilities
-        let formattedAbilities = formatAbilitiesSection(block.abilities, maxLen);
-        
-        // Build result with proper indentation
-        result += `    ${id} => ${title}\n      [[\n`;
-        
-        // Description section
-        formattedDescription.forEach(line => {
-          result += `        "${escapeQuotes(line)}",\n`;
-        });
-        
-        // Section separator
-        result += `    ],\n    [\n`;
-        
-        // Equipment, skills and abilities sections
-        formattedEquipment.forEach(line => {
-          result += `        "${escapeQuotes(line)}",\n`;
-        });
-        
-        formattedSkills.forEach(line => {
-          result += `        "${escapeQuotes(line)}",\n`;
-        });
-        
-        formattedAbilities.forEach(line => {
-          result += `        "${escapeQuotes(line)}",\n`;
-        });
-        
-        result += `      ]],\n`;
       });
       
       return result;
