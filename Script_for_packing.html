@@ -1196,75 +1196,117 @@ pause > nul
       let newContent = beforeBlocks + 'JOB_DESC_TEXT = {';
       let updatedCount = 0;
       
-      // Обновляем каждый блок
-      blocks.forEach((block, index) => {
-        const id = block.id;
-        let content = block.content;
-        
-        console.log(`Обрабатываем блок с ID: ${id}`);
-        
-        // Добавляем перенос строки перед первым блоком
-        if (index === 0) {
-          newContent += '\n';
-        }
-        
-        // Разбиваем блок на строки и анализируем отступы
-        const lines = content.split('\n');
-        const processedLines = lines.map((line, lineIndex, array) => {
-          const trimmedLine = line.trim();
-          
-          // Определяем базовый отступ для каждой строки
-          if (lineIndex === 0) {
-            // Первая строка (с ID) получает 4 пробела
-            return '    ' + trimmedLine;
-          } else if (trimmedLine === '[[') {
-            // Строка с [[ получает 6 пробелов
-            return '      ' + trimmedLine;
-          } else if (trimmedLine.includes('"')) {
-            // Строки с кавычками получают 8 пробелов
-            return '        ' + trimmedLine;
-          } else if (trimmedLine === '],') {
-            // Закрывающая скобка первого массива
-            return '      ' + trimmedLine;
-          } else if (trimmedLine === '[') {
-            // Открывающая скобка второго массива
-            return '      ' + trimmedLine;
-          } else if (trimmedLine === ']]' || trimmedLine === ']],' || trimmedLine === ']],,' || trimmedLine.startsWith(']]') && trimmedLine.endsWith(',')) {
-            // Закрывающие скобки и запятые получают 6 пробелов
-            return '      ' + trimmedLine;
-          } else {
-            // Проверяем, является ли текущая строка частью последовательности "],\n["
-            const prevLine = lineIndex > 0 ? array[lineIndex - 1].trim() : '';
-            const nextLine = lineIndex < array.length - 1 ? array[lineIndex + 1].trim() : '';
-            
-            if ((prevLine === '],' && trimmedLine === '[') || 
-                (trimmedLine === '],' && nextLine === '[')) {
-              return '      ' + trimmedLine;
-            }
-            
-            // Остальные строки сохраняют свои отступы
-            return line;
-          }
-        });
-        
-        // Собираем блок обратно
-        newContent += processedLines.join('\n');
-        
-        // Добавляем запятую после блока
-        if (!processedLines[processedLines.length - 1].trim().endsWith(',')) {
-          newContent += ',';
-        }
-        
-        // Добавляем двойной перенос строки между блоками
-        if (index < blocks.length - 1) {
-          newContent += '\n\n';
-        }
-        
-        updatedCount++;
+      // Разбиваем содержимое на строки для анализа
+      const lines = blocksContent.split('\n');
+      let currentBlock = [];
+      let currentBlockId = null;
+      let isInBlock = false;
+      let result = [];
+      let fileEndFormat = null;
+      
+      // Определяем формат окончания файла
+      const endMatch = blocksContent.match(/(\s*}\s*\n\s*end\s*$)/);
+      if (endMatch) {
+        fileEndFormat = endMatch[1];
+      }
+      
+      // Создаем карту новых блоков для быстрого доступа
+      const newBlocksMap = {};
+      blocks.forEach(block => {
+        newBlocksMap[block.id] = block.content.split('\n');
       });
       
-      // Закрываем секцию JOB_DESC_TEXT
-      newContent += '\n  }';
+      // Проходим по каждой строке оригинального файла
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+        const idMatch = trimmedLine.match(/^(\d+)\s*=>/);
+        
+        // Пропускаем строки окончания файла
+        if (fileEndFormat && line.trim() === '}') break;
+        if (fileEndFormat && line.trim() === 'end') break;
+        
+        if (idMatch) {
+          // Если мы нашли новый блок
+          if (currentBlock.length > 0) {
+            // Добавляем предыдущий блок в результат
+            result.push(...currentBlock);
+            if (i < lines.length - 1) result.push(''); // Пустая строка между блоками
+          }
+          
+          currentBlockId = idMatch[1];
+          currentBlock = [];
+          isInBlock = true;
+          
+          if (newBlocksMap[currentBlockId]) {
+            // Если есть обновленный блок, начинаем его обработку
+            const newBlockLines = newBlocksMap[currentBlockId];
+            const indent = line.match(/^\s*/)[0];
+            
+            // Добавляем первую строку с оригинальным отступом
+            currentBlock.push(indent + trimmedLine);
+            
+            // Флаги для отслеживания структуры блока
+            let inFirstArray = false;
+            let inSecondArray = false;
+            let firstArrayClosed = false;
+            
+            // Обрабатываем остальные строки нового блока
+            for (let j = 1; j < newBlockLines.length; j++) {
+              const newLine = newBlockLines[j].trim();
+              
+              if (newLine === '[[') {
+                inFirstArray = true;
+                currentBlock.push(indent + '  ' + newLine);
+              } else if (newLine === ']]' || newLine === ']],' || newLine.startsWith(']]') && newLine.endsWith(',')) {
+                inFirstArray = false;
+                inSecondArray = false;
+                currentBlock.push(indent + '  ' + newLine);
+              } else if (newLine === '],') {
+                inFirstArray = false;
+                firstArrayClosed = true;
+                currentBlock.push(indent + '  ' + newLine);
+              } else if (newLine === '[' && firstArrayClosed) {
+                inSecondArray = true;
+                currentBlock.push(indent + '  ' + newLine);
+              } else if (newLine.startsWith('"')) {
+                // Строки с текстом
+                if (inFirstArray || inSecondArray) {
+                  currentBlock.push(indent + '  ' + newLine);
+                }
+              } else {
+                // Прочие строки сохраняют базовый отступ
+                currentBlock.push(indent + '  ' + newLine);
+              }
+            }
+            
+            updatedCount++;
+          } else {
+            // Если нет обновленного блока, сохраняем оригинальную строку
+            currentBlock.push(line);
+          }
+        } else if (isInBlock) {
+          // Если мы внутри блока и нет обновленной версии
+          if (!newBlocksMap[currentBlockId]) {
+            currentBlock.push(line);
+          }
+        }
+      }
+      
+      // Добавляем последний блок
+      if (currentBlock.length > 0) {
+        result.push(...currentBlock);
+      }
+      
+      // Собираем финальный результат
+      newContent += '\n' + result.join('\n');
+      
+      // Добавляем окончание файла
+      if (fileEndFormat) {
+        newContent += fileEndFormat;
+      } else {
+        newContent += '\n  }\n\nend\n';
+      }
       
       console.log(`Обновлено ${updatedCount} блоков`);
       
