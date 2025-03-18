@@ -1231,7 +1231,6 @@ pause > nul
           if (currentBlock.length > 0) {
             // Добавляем предыдущий блок в результат
             result.push(...currentBlock);
-            if (i < lines.length - 1) result.push(''); // Пустая строка между блоками
           }
           
           currentBlockId = idMatch[1];
@@ -1243,8 +1242,36 @@ pause > nul
             const newBlockLines = newBlocksMap[currentBlockId];
             const indent = line.match(/^\s*/)[0];
             
-            // Добавляем первую строку с оригинальным отступом
-            currentBlock.push(indent + trimmedLine);
+            // Обработка комментария в первой строке
+            const originalFirstLine = line;
+            const newFirstLine = newBlockLines[0];
+            
+            const originalComment = originalFirstLine.match(/#\s*([^#]+?)(?:\s*$|$)/);
+            const newComment = newFirstLine.match(/#\s*([^#]+?)(?:\s*$|$)/);
+            
+            // Формируем первую строку с объединенным комментарием
+            let firstLine = indent + currentBlockId + ' =>'; // Базовая часть строки
+            
+            if (originalComment && newComment) {
+              const origCommentText = originalComment[1].trim();
+              const newCommentText = newComment[1].trim();
+              
+              if (origCommentText !== newCommentText) {
+                if (!origCommentText.includes(newCommentText) && !newCommentText.includes(origCommentText)) {
+                  firstLine += ' # ' + origCommentText + '/' + newCommentText;
+                } else {
+                  firstLine += ' # ' + (origCommentText.length > newCommentText.length ? origCommentText : newCommentText);
+                }
+              } else {
+                firstLine += ' # ' + origCommentText;
+              }
+            } else if (originalComment) {
+              firstLine += ' # ' + originalComment[1].trim();
+            } else if (newComment) {
+              firstLine += ' # ' + newComment[1].trim();
+            }
+            
+            currentBlock.push(firstLine);
             
             // Флаги для отслеживания структуры блока
             let inFirstArray = false;
@@ -1270,12 +1297,10 @@ pause > nul
                 inSecondArray = true;
                 currentBlock.push(indent + '  ' + newLine);
               } else if (newLine.startsWith('"')) {
-                // Строки с текстом
-                if (inFirstArray || inSecondArray) {
-                  currentBlock.push(indent + '  ' + newLine);
-                }
+                // Строки с описанием получают ровно 8 пробелов отступа
+                currentBlock.push('        ' + newLine);
               } else {
-                // Прочие строки сохраняют базовый отступ
+                // Прочие строки получают базовый отступ + 2 пробела
                 currentBlock.push(indent + '  ' + newLine);
               }
             }
@@ -1307,6 +1332,9 @@ pause > nul
       } else {
         newContent += '\n  }\n\nend\n';
       }
+      
+      // Удаляем пустые строки между блоками
+      newContent = removeEmptyLinesBetweenBlocks(newContent);
       
       console.log(`Обновлено ${updatedCount} блоков`);
       
@@ -1868,7 +1896,6 @@ pause > nul
 
   // Unified format function for equipment and skills
   function formatWithWideSpaces(categoryName, inputLines, maxLineLength) {
-    const indent = "			   "; // Standard indentation  
     const result = [];
     
     // Step 1: Extract raw content (removing category prefix)
@@ -1901,7 +1928,7 @@ pause > nul
     }
     
     // Step 3: Format with line length constraints
-    let currentLine = `${categoryName} `;
+    let currentLine = `${categoryName}: `;
     let firstItem = true;
     
     items.forEach(item => {
@@ -1920,12 +1947,12 @@ pause > nul
       } else {
         // Start a new line
         result.push(currentLine);
-        currentLine = `${indent}${itemText}`;
+        currentLine = itemText;
       }
     });
     
     // Add the final line if not empty
-    if (currentLine && currentLine !== `${categoryName} `) {
+    if (currentLine && currentLine !== `${categoryName}: `) {
       result.push(currentLine);
     }
     
@@ -1940,7 +1967,6 @@ pause > nul
   // Special function for abilities processing
   function formatAbilitiesSection(inputLines, maxLineLength) {
     const categoryName = "Способности:";
-    const indent = "			   ";
     const result = [];
     
     // Process all input lines
@@ -1975,7 +2001,7 @@ pause > nul
         // Start a new line if doesn't fit
         else {
           result.push(currentLine);
-          currentLine = indent + part;
+          currentLine = part;
         }
       }
       
@@ -2812,6 +2838,54 @@ pause > nul
       console.error("Общая ошибка в processSkillReplacer:", e);
       alert('Ошибка обработки: ' + e.message);
     }
+  }
+
+  function removeEmptyLinesBetweenBlocks(content) {
+    // Разбиваем содержимое на строки
+    let lines = content.split('\n');
+    let result = [];
+    let lastNonEmptyLine = '';
+    let blockStartPattern = /^\s*\d+\s*=>/;
+    let blockEndPattern = /\]\],\s*$/;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const currentLine = lines[i].trimRight(); // Убираем пробелы справа
+      
+      // Пропускаем пустые строки между блоками
+      if (currentLine.trim() === '') {
+        // Проверяем, находимся ли мы между блоками
+        if (lastNonEmptyLine.match(blockEndPattern)) {
+          // Ищем следующую непустую строку
+          let nextNonEmptyLine = '';
+          for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].trim() !== '') {
+              nextNonEmptyLine = lines[j].trim();
+              break;
+            }
+          }
+          // Если следующая непустая строка начинает новый блок, пропускаем текущую пустую строку
+          if (nextNonEmptyLine.match(blockStartPattern)) {
+            continue;
+          }
+        }
+      }
+      
+      // Сохраняем последнюю непустую строку
+      if (currentLine.trim() !== '') {
+        lastNonEmptyLine = currentLine;
+      }
+      
+      // Добавляем строку в результат
+      result.push(currentLine);
+    }
+    
+    // Удаляем возможные пустые строки в конце файла перед закрывающей скобкой
+    while (result.length > 0 && result[result.length - 1].trim() === '') {
+      result.pop();
+    }
+    
+    // Собираем результат с правильными переносами строк
+    return result.join('\n');
   }
 </script>
 </body>
