@@ -136,6 +136,7 @@
         <button class="tab-btn" data-mode="jobchange">JobChange</button>
         <button class="tab-btn" data-mode="medal">Library(Medal)</button>
         <button class="tab-btn" data-mode="skillreplacer">Skill Replacer</button>
+        <button class="tab-btn" data-mode="follower">Follower</button>
     </div>
 
     <!-- Кнопки выбора языка -->
@@ -1719,6 +1720,8 @@ pause > nul
       } else if (currentTab === "skillreplacer") {
         // Для вкладки Skill Replacer не выполняем автоматическую обработку
         return;
+      } else if (currentTab === "follower") {
+        output = processFollowerText(inputText);
       }
       
       document.getElementById('output-content').textContent = output;
@@ -2886,6 +2889,50 @@ pause > nul
     
     // Собираем результат с правильными переносами строк
     return result.join('\n');
+  }
+
+  function processFollowerText(input) {
+    // Разбиваем входной текст на записи
+    const entries = input.split(/\n\n/).filter(e => e.trim());
+    
+    return entries.map(entry => {
+      const lines = entry.split('\n').filter(line => line.trim());
+      if (lines.length < 4) return "Ошибка: неполные данные";
+
+      // Парсим первую строку
+      const firstLine = lines[0].split(',').map(s => s.trim());
+      const actorId = firstLine[0];
+      const denominator = firstLine[1];
+      const questionNum = firstLine[2];
+      
+      // Извлекаем идентификатор и номера из оставшейся части первой строки
+      const dialogInfo = firstLine.slice(3).join(' ');
+      const identifierMatch = dialogInfo.match(/([a-z_]+_fc1)/);
+      if (!identifierMatch) return "Ошибка: не найден идентификатор";
+      const identifier = identifierMatch[1];
+      
+      // Извлекаем номера диалогов
+      const numbers = dialogInfo.split(identifier).map(s => s.trim()).filter(s => s);
+      const [num1, num2, num3] = numbers;
+
+      // Парсим вторую строку
+      const [number, title] = lines[1].split('#').map(s => s.trim());
+
+      // Получаем диалоги, убирая лишние кавычки
+      const question = lines[2].slice(1, -1).replace(/^"|"$/g, '');
+      const yes = lines[3].slice(1, -1).replace(/^"|"$/g, '');
+      const no = lines[4].slice(1, -1).replace(/^"|"$/g, '');
+
+      // Формируем результат
+      let result = `    ${number} => { # ${title}\n`;
+      result += `      :actor_id => ${actorId}, :denominator => ${denominator},\n`;
+      result += `      :question => ["${question}", "${identifier}", ${num1}],\n`;
+      result += `      :yes => ["${yes}", "${identifier}", ${num2}],\n`;
+      result += `      :no => ["${no}", "${identifier}", ${num3}],\n`;
+      result += `    },`;
+
+      return result;
+    }).join("\n\n");
   }
 </script>
 </body>
