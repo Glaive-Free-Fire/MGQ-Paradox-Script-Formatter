@@ -200,7 +200,8 @@
   const FILE_NAMES = {
     "library": "201 - Library(Enemy).rb",
     "jobchange": "197 - JobChange.rb",
-    "medal": "204 - Library(Medal).rb"
+    "medal": "204 - Library(Medal).rb",
+    "follower": "195 - Follower.rb"
   };
   
   // Глобальные переменные для хранения информации о выбранном файле
@@ -651,57 +652,14 @@ pause > nul
   
   // Функция для компиляции данных
   function compileData() {
-    // Получаем данные из окна вывода
-    const outputContent = document.getElementById('output-content').textContent;
-    if (!outputContent.trim()) {
-      showStatusMessage('Нет данных для обновления файла', true);
-      return;
-    }
-    
-    // Проверяем, есть ли содержимое файла в глобальной переменной
-    if (window.lastSelectedFileContent) {
-      // Используем сохраненное содержимое файла
-      updateFileContent(window.lastSelectedFileContent);
-    } else {
-      // Проверяем, выбран ли файл
-      const fileInput = document.getElementById('input-file');
-      if (fileInput && fileInput.files.length > 0) {
-        // Файл выбран, но содержимое еще не обработано
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const fileContent = e.target.result;
-          window.lastSelectedFileContent = fileContent;
-          window.lastSelectedFileName = fileInput.files[0].name;
-          updateFileContent(fileContent);
-        };
-        reader.onerror = function() {
-          showStatusMessage('Ошибка при чтении файла', true);
-        };
-        reader.readAsText(fileInput.files[0]);
-      } else {
-        // Предлагаем пользователю выбрать файл
-        showStatusMessage('Пожалуйста, выберите оригинальный файл для обновления', true);
-        
-        // Делаем поле выбора файла более заметным
-        const fileInputContainer = document.getElementById('file-input-container');
-        if (fileInputContainer) {
-          fileInputContainer.style.border = '2px solid #f44336';
-          fileInputContainer.style.padding = '10px';
-          fileInputContainer.style.borderRadius = '4px';
-          
-          // Убираем выделение через 3 секунды
-          setTimeout(() => {
-            fileInputContainer.style.border = 'none';
-            fileInputContainer.style.padding = '0';
-          }, 3000);
-        }
-      }
-    }
-  }
-  
-  // Функция для обновления содержимого файла
-  function updateFileContent(fileContent) {
     try {
+      // Получаем содержимое файла
+      const fileContent = window.lastSelectedFileContent;
+      if (!fileContent) {
+        showStatusMessage('Сначала выберите файл для компиляции', true);
+        return;
+      }
+      
       // Получаем данные из окна вывода
       const outputContent = document.getElementById('output-content').textContent;
       if (!outputContent.trim()) {
@@ -709,47 +667,169 @@ pause > nul
         return;
       }
       
-      // Обрабатываем в зависимости от текущей вкладки
-      let newContent;
-      switch (currentTab) {
-        case 'library':
-          newContent = updateLibraryFile(fileContent, outputContent);
-          break;
-        case 'jobchange':
-          newContent = updateJobChangeFile(fileContent, outputContent);
-          break;
-        case 'medal':
-          newContent = updateMedalFile(fileContent, outputContent);
-          break;
-        default:
-          showStatusMessage('Неподдерживаемая вкладка для компиляции', true);
-          return;
+      // Разбиваем содержимое окна вывода на блоки
+      let newBlocks;
+      if (currentTab === "follower") {
+        newBlocks = outputContent.split(/\n\n/).filter(block => block.trim());
+      } else {
+        newBlocks = outputContent.split(/\n\n/).filter(block => block.trim());
       }
       
-      // Проверяем, были ли изменения
+      // Обновляем содержимое файла
+      const newContent = updateFileContent(fileContent, newBlocks, true);
       if (!newContent) {
-        showStatusMessage('Не найдены блоки для обновления', true);
+        showStatusMessage('Не удалось обновить файл', true);
         return;
       }
       
-      // Создаем ссылку для скачивания обновленного файла
-      const blob = new Blob([newContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const downloadLink = document.getElementById('download-link');
-      const downloadContainer = document.getElementById('download-container');
-      
-      if (downloadLink && downloadContainer) {
-        downloadLink.href = url;
-        downloadLink.download = FILE_NAMES[currentTab];
-        downloadContainer.style.display = 'block';
-        
-        showStatusMessage('Файл успешно обновлен. Скачайте его и замените оригинальный файл в папке Decompiled.');
-      } else {
-        showStatusMessage('Ошибка: не найдена ссылка для скачивания', true);
-      }
     } catch (e) {
-      console.error('Ошибка при обновлении содержимого файла:', e);
-      showStatusMessage(`Ошибка при обновлении файла: ${e.message}`, true);
+      console.error('Ошибка при компиляции данных:', e);
+      showStatusMessage(`Ошибка при компиляции данных: ${e.message}`, true);
+    }
+  }
+  
+  // Функция для обновления содержимого файла
+  function updateFileContent(content, newBlocks, isDirectCall = false) {
+    try {
+      let newContent = '';
+      let updatedCount = 0;
+      
+      // Определяем тип файла и формат
+      let fileType = '';
+      let fileStartFormat = '';
+      let fileEndFormat = '';
+      
+      if (currentTab === "library") {
+        fileType = "library";
+        fileStartFormat = "module NWConst::Enemy\n  ENEMY = {\n";
+        fileEndFormat = "  }\nend\n";
+      } else if (currentTab === "jobchange") {
+        fileType = "jobchange";
+        fileStartFormat = "module NWConst::JobChange\n  JOB_CHANGE = {\n";
+        fileEndFormat = "  }\nend\n";
+      } else if (currentTab === "medal") {
+        fileType = "medal";
+        fileStartFormat = "module NWConst::Medal\n  MEDAL = {\n";
+        fileEndFormat = "  }\nend\n";
+      } else if (currentTab === "follower") {
+        fileType = "follower";
+        fileStartFormat = ""; // Не добавляем начало файла для Follower
+        fileEndFormat = ""; // Не добавляем конец файла для Follower
+      } else {
+        throw new Error("Неподдерживаемая вкладка для компиляции");
+      }
+      
+      // Добавляем начало файла только если это не вкладка Follower
+      if (currentTab !== "follower") {
+        newContent += fileStartFormat;
+      }
+      
+      // Создаем карту новых блоков для быстрого доступа
+      const newBlocksMap = {};
+      newBlocks.forEach(block => {
+        const idMatch = block.match(/^\s*(\d+)\s*=>/);
+        if (idMatch) {
+          newBlocksMap[idMatch[1]] = block;
+        }
+      });
+      
+      // Разбиваем содержимое на строки
+      const lines = content.split('\n');
+      let result = [];
+      let currentBlock = [];
+      let currentBlockId = null;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+        
+        // Пропускаем начало и конец файла
+        if ((fileStartFormat && trimmedLine === fileStartFormat.trim()) || 
+            (fileEndFormat && trimmedLine === fileEndFormat.trim())) {
+          continue;
+        }
+        
+        // Проверяем, является ли строка началом блока
+        const blockStartMatch = trimmedLine.match(/^\s*(\d+)\s*=>/);
+        
+        if (blockStartMatch) {
+          // Если у нас уже есть блок, добавляем его в результат
+          if (currentBlock.length > 0) {
+            result.push(...currentBlock);
+            currentBlock = [];
+          }
+          
+          currentBlockId = blockStartMatch[1];
+          currentBlock.push(line);
+        } else if (currentBlockId) {
+          // Если мы внутри блока
+          currentBlock.push(line);
+          
+          // Проверяем, является ли эта строка концом блока
+          if (trimmedLine === "}," || trimmedLine === "}") {
+            // Если есть обновленная версия блока, используем её
+            if (newBlocksMap[currentBlockId]) {
+              result.push(newBlocksMap[currentBlockId]);
+              updatedCount++;
+            } else {
+              result.push(...currentBlock);
+            }
+            currentBlock = [];
+            currentBlockId = null;
+          }
+        } else {
+          // Если мы не внутри блока
+          result.push(line);
+        }
+      }
+      
+      // Добавляем последний блок, если он есть
+      if (currentBlock.length > 0) {
+        if (currentBlockId && newBlocksMap[currentBlockId]) {
+          result.push(newBlocksMap[currentBlockId]);
+          updatedCount++;
+        } else {
+          result.push(...currentBlock);
+        }
+      }
+      
+      // Собираем финальный результат
+      newContent += '\n' + result.join('\n');
+      
+      // Добавляем окончание файла только если это не вкладка Follower
+      if (currentTab !== "follower" && fileEndFormat) {
+        newContent += fileEndFormat;
+      }
+      
+      // Удаляем пустые строки между блоками
+      newContent = removeEmptyLinesBetweenBlocks(newContent);
+      
+      console.log(`Обновлено ${updatedCount} блоков`);
+      
+      // Проверяем, вызван ли метод напрямую
+      if (isDirectCall) {
+        // Создаем новый файл с обновленным содержимым
+        const blob = new Blob([newContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        // Создаем ссылку для скачивания
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `updated_${FILE_NAMES[currentTab]}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log("Файл успешно обновлен и сохранен");
+        showStatusMessage("Файл успешно обновлен и сохранен");
+      }
+      
+      return newContent;
+    } catch (e) {
+      console.error('Ошибка при обновлении файла:', e);
+      showStatusMessage('Ошибка при обновлении файла', true);
+      return null;
     }
   }
   
