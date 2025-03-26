@@ -660,18 +660,18 @@ pause > nul
         return;
       }
       
-      // Получаем данные из окна вывода
-      const outputContent = document.getElementById('output-content').textContent;
-      if (!outputContent.trim()) {
-        showStatusMessage('Нет данных для обновления файла', true);
-        return;
-      }
-      
+    // Получаем данные из окна вывода
+    const outputContent = document.getElementById('output-content').textContent;
+    if (!outputContent.trim()) {
+      showStatusMessage('Нет данных для обновления файла', true);
+      return;
+    }
+    
       // Разбиваем содержимое окна вывода на блоки
       let newBlocks;
       if (currentTab === "follower") {
         newBlocks = outputContent.split(/\n\n/).filter(block => block.trim());
-      } else {
+    } else {
         newBlocks = outputContent.split(/\n\n/).filter(block => block.trim());
       }
       
@@ -809,8 +809,8 @@ pause > nul
       // Проверяем, вызван ли метод напрямую
       if (isDirectCall) {
         // Создаем новый файл с обновленным содержимым
-        const blob = new Blob([newContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
+      const blob = new Blob([newContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
         
         // Создаем ссылку для скачивания
         const a = document.createElement('a');
@@ -2987,12 +2987,19 @@ pause > nul
       
       // Извлекаем идентификатор и номера из оставшейся части первой строки
       const dialogInfo = firstLine.slice(3).join(' ');
-      const identifierMatch = dialogInfo.match(/([a-z_]+_fc1)/);
+      
+      // Изменяем регулярное выражение, чтобы оно искало _fc1 или _fc2
+      const identifierMatch = dialogInfo.match(/([a-zA-Z0-9_]+_fc[12])/);
       if (!identifierMatch) return "Ошибка: не найден идентификатор";
       const identifier = identifierMatch[1];
       
-      // Извлекаем номера диалогов
-      const numbers = dialogInfo.split(identifier).map(s => s.trim()).filter(s => s);
+      // Извлекаем номера диалогов, учитывая возможные пробелы
+      const numbers = dialogInfo.split(identifier)
+        .map(s => s.trim())
+        .filter(s => s)
+        .map(s => s.split(/\s+/)[0]); // Берем только первое число из каждой части
+      
+      if (numbers.length < 3) return "Ошибка: неполные данные диалогов";
       const [num1, num2, num3] = numbers;
 
       // Парсим вторую строку
