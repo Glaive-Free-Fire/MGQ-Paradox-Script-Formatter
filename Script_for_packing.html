@@ -2766,8 +2766,13 @@ pause > nul
     
     let result = `${blockIdIndent}${block.id} => [\n`;
     
-    // Добавляем содержимое с отступами
+    // Добавляем содержимое с отступами, пропуская пустые строки в начале
+    let firstLine = true;
     outputLines.forEach(line => {
+      if (firstLine && line === "") {
+        return; // Пропускаем первую пустую строку
+      }
+      firstLine = false;
       result += `${contentIndent}"${escapeQuotes(line)}",\n`;
     });
     
