@@ -157,6 +157,12 @@ function fixMapErrors(text) {
   // НОВОЕ: Исправляем случайную замену ShowText на Copy
   text = text.replace(/Copy\(\["([^"]*)"\]\)/g, 'ShowText(["$1"])');
   
+  // НОВОЕ: Исправляем опечатку ShowTex
+  text = text.replace(/ShowTex\(\["([^"]*)"\]\)/g, 'ShowText(["$1"])');
+  
+  // НОВОЕ: Исправляем неправильно экранированные управляющие коды
+  text = text.replace(/\\n<\\C\[(\d+)\]([^>]*)>/g, '\\n<\\C[$1]>$2');
+  
   // НОВОЕ: Исправляем повреждённые ShowTextAttributes с незакрытой кавычкой
   text = text.replace(/ShowTextAttributes\(\["([^"]*),\s*(\d+),\s*(\d+),\s*(\d+)\]\)/g, 'ShowTextAttributes(["$1", $2, $3, $4])');
   
@@ -308,8 +314,13 @@ function processMapText(text) {
   try {
     Logger.info('map', 'Начало обработки текста карты');
     
-    // Исправляем двойные кавычки в Display Name
-    text = text.replace(/Display Name = ""([^"]*)"/, 'Display Name = "$1"');
+    // Исправляем Display Name: удаляем все внутренние кавычки, сохраняя внешние
+    text = text.replace(
+      /^(Display Name = ")(.*?)(")$/gm,
+      (match, prefix, inner, suffix) =>
+        // убираем все " внутри inner, но сохраняем префикс и суффикс
+        `${prefix}${inner.replace(/"/g, '')}${suffix}`
+    );
     
     // Сначала исправляем известные ошибки
     text = fixMapErrors(text);
