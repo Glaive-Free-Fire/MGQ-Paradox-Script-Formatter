@@ -1,145 +1,135 @@
-# RB_Script_AutoFormatter
+# MGQ-Paradox Script Formatter
 
-## Описание
+## Overview
 
-RB_Script_AutoFormatter - это инструмент для автоматизации работы с .rb скриптами, позволяющий быстро сохранять их в распакованном формате для редактирования и последующей упаковки обратно в формат игры. Особенно полезен для локализации и редактирования игровых данных в проектах на RPG Maker.
+MGQ-Paradox Script Formatter is a specialized web tool for editing and formatting text data files from Monster Girl Quest Paradox. This tool enables efficient localization and text data management by providing an intuitive interface for editing various game data files and formatting them correctly for the game engine.
 
-## Функциональность
+## Key Features
 
-Инструмент предоставляет следующие возможности:
+- **Multi-format Support**: Edit different data structures including monster descriptions, job classes, medals, follower dialog, and map events
+- **Language Toggle**: Switch between Japanese and Russian interfaces to support multilingual editing
+- **Smart Text Formatting**: Automatic text wrapping and formatting based on configurable character limits
+- **Direct Compilation**: Update original Ruby files with your edited content without manual copy/pasting
+- **Skill Reference Resolution**: Replace numeric skill references with their actual names using the Skill Replacer
 
-- **Распаковка скриптов** - извлечение данных из .rb файлов в удобный для редактирования формат
-- **Форматирование текста** - автоматическое форматирование с учетом длины строки и структуры данных
-- **Упаковка обратно в игру** - сохранение отредактированных данных в формате, совместимом с игрой
-- **Поддержка нескольких типов данных**:
-  - Library(Enemy) - описания врагов
-  - JobChange - описания классов/профессий
-  - Library(Medal) - описания медалей/достижений
-  - Skill Replacer - замена ссылок на навыки
+## Supported File Types
 
-## Использование
+| Mode | File Pattern | Description |
+|------|--------------|-------------|
+| Library(Enemy) | 201 - Library(Enemy).rb | Monster descriptions and attributes |
+| JobChange | 197 - JobChange.rb | Character class/job descriptions and skills |
+| Library(Medal) | 204 - Library(Medal).rb | Achievement/medal descriptions |
+| Skill Replacer | N/A | Tool to replace numeric skill IDs with names |
+| Follower | 195 - Follower.rb | Companion dialog formatting |
+| Map | Map events | Dialog and event text formatting |
 
-### Базовое использование
+## Usage Guide
 
-1. Выберите нужный режим работы (Library(Enemy), JobChange, Library(Medal) или Skill Replacer)
-2. Выберите язык (RUS или JAP)
-3. Вставьте исходный текст в поле ввода
-4. Нажмите "Копировать результат" для получения отформатированного текста
-5. Для сохранения в файл:
-   - Переключитесь в "Режим прямой компиляции"
-   - Загрузите исходный файл
-   - Нажмите "Компилировать данные"
+### Basic Workflow
 
-### Структура исходного текста
+1. **Select Mode**: Choose the appropriate tab for the type of file you're editing
+2. **Choose Language**: Toggle between RUS/JAP depending on which language you're working with
+3. **Input Text**: Paste your raw text data into the left panel
+4. **View Results**: See the properly formatted output in the right panel
+5. **Export**: Either copy the formatted text or use the direct compilation feature
 
-#### Примеры для режима Library(Enemy)
+### Line Length Control
 
+- Use the "ДЛИНА СТРОКИ" controls to adjust maximum line length
+- Default values:
+  - Russian text: 39 characters
+  - Japanese text: 22 characters
+  - JobChange text: 30 characters
+  - Map text: 50 characters
+
+### Direct Compilation Mode
+
+For seamless integration with game files:
+
+1. Click "Режим прямой компиляции"
+2. Select the original Ruby file using the file selector
+3. Click "Компилировать данные" to generate an updated file
+4. Download the resulting file to use in your game
+
+### Input Format Examples
+
+#### Library(Enemy) Format
 ```
-1 # Слизь
-Обычная слизь, которую можно встретить в любом подземелье. Слабый противник, который не представляет угрозы для опытных авантюристов. Иллюстрация: Художник
+146 # Enemy Name
+Description text goes here. This will be properly
+formatted according to the line length settings.
+Иллюстрация: Artist Name
 ```
 
-#### Примеры для режима JobChange
-
+#### JobChange Format
 ```
-1 => # Воин
-Базовый класс, специализирующийся на ближнем бою. Экипировка: Мечи, Топоры, Копья Навыки: Рассечение, Выпад Способности: Стойкость
-```
-
-#### Примеры для режима Skill Replacer
-
-```
-<Skill: 123>
-<Skill: 456>
+12 # Class Name
+Class description text.
+Экипировка: Weapon1　Weapon2　Weapon3
+Навыки: Skill1　Skill2　Skill3
+Способности: Ability1　Ability2
 ```
 
-### Важные особенности форматирования
+#### Follower Format
+```
+1,2,3,fc1 1 2 3
+32#Dialog Title
+"Question text here?"
+"Yes response"
+"No response"
+```
 
-#### Идентификатор и заголовок
+## Technical Features
 
-- Каждый блок должен начинаться с числового идентификатора
-- За идентификатором следует символ # и название на японском (для режима Library(Enemy))
-- Для JobChange используется формат `ID => # Название`
+### Intelligent Text Processing
 
-#### Широкие пробелы
+- **Wide Space Preservation**: Maintains Japanese-style wide spaces (　) used to separate list items
+- **Illustration Attribution**: Properly formats artist credits with the correct prefix format
+- **Section Detection**: Automatically identifies equipment, skills, and abilities sections
+- **Smart Quoting**: Handles quotation marks and escaping in dialog correctly
 
-- В исходных данных используются японские широкие пробелы `　` для разделения элементов в списках
-- Эти пробелы необходимо сохранять, так как они используются игрой для корректного разделения элементов
-- Скрипт автоматически обрабатывает и сохраняет эти пробелы в выходных данных
+### Map Text Correction
 
-#### Секции описания
+The Map mode includes extensive error correction for common issues:
 
-Для корректного форматирования важно правильно обозначать начало каждой секции:
+- Fixes malformed `ShowText` commands
+- Cleans redundant quotes in text strings
+- Corrects command syntax errors
+- Normalizes formatting for dialog choices
 
-- **Экипировка:** или **Экипировка：** (с японским двоеточием)
-- **Навыки:** или **Навыки：**
-- **Способности:** или **Способности：**
+### Multi-block Processing
 
-На японском:
-- **装備武器：**
-- **スキル：**
-- **アビリティ：**
+When working with files containing multiple entries:
 
-#### Обработка иллюстраций
+- Entries are properly parsed and maintained in the correct order
+- ID-based addressing ensures updates only affect the intended entries
+- File structure and formatting is preserved during compilation
 
-- Скрипт находит информацию об иллюстраторе как в русском ("Иллюстрация:"), так и в японском ("イラスト：") тексте
-- Если в тексте на активном языке нет информации об иллюстраторе, используется информация из другого языка
-- В результате форматирования всегда используется японское двоеточие: "Иллюстрация："
+## Installation
 
-### Настройка длины строки
+1. Clone this repository
+2. Open `Script_for_packing.html` in any modern web browser
+3. No server setup required - the tool runs entirely in your browser
 
-- Используйте поле "ДЛИНА СТРОКИ" для указания максимальной длины строки в символах
-- По умолчанию используется значение 40 символов
-- Для японского текста рекомендуется использовать значение 30-35 символов
-- Для русского текста оптимально 40-45 символов
+## Browser Compatibility
 
-## Порядок размещения блоков и интеллектуальная сортировка
+The tool works in all modern browsers that support:
+- FileReader API
+- ES6 JavaScript features
+- Modern CSS layout techniques
 
-Скрипт сохраняет порядок блоков в соответствии с их идентификаторами. При компиляции данных в файл:
+## Contributing
 
-1. Скрипт анализирует структуру исходного файла
-2. Находит соответствующие блоки данных по их идентификаторам
-3. Заменяет содержимое блоков на новые отформатированные данные
-4. Сохраняет исходную структуру файла и порядок блоков
+Contributions to improve the MGQ-Paradox Script Formatter are welcome:
 
-## Особенности форматирования
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request with your changes
 
-### Выходной формат данных
+## License
 
-- Для Library(Enemy) данные форматируются в виде массива строк
-- Для JobChange используется вложенная структура массивов
-- Для Library(Medal) используется формат, аналогичный Library(Enemy)
+This tool is developed specifically for Monster Girl Quest Paradox modding and is provided as-is under the MIT license.
 
-### Автоматический перенос
+---
 
-Скрипт автоматически переносит текст, соблюдая указанную максимальную длину строки:
-- Переносы делаются по пробелам
-- Сохраняется структура секций (экипировка, навыки, способности)
-- Информация об иллюстраторе всегда размещается в конце описания
-
-### Замена ссылок на навыки
-
-В режиме Skill Replacer:
-- Скрипт заменяет теги вида `` на соответствующие названия навыков
-- Необходимо предварительно загрузить файл Skills для корректной замены
-
-## Установка
-
-1. Скачайте файлы проекта из репозитория
-2. Откройте файл Script_for_packing.html в любом современном браузере
-3. Для распаковки используйте Script_for_unpacking.html
-
-## Требования
-
-- Современный веб-браузер с поддержкой JavaScript
-- Для работы с файлами требуется доступ к файловой системе
-
-## Контрибуция
-
-Вклады в проект приветствуются! Если у вас есть идеи по улучшению или вы нашли ошибку:
-1. Создайте issue с описанием проблемы или предложения
-2. Отправьте pull request с вашими изменениями
-
-## Лицензия
-
-Этот проект распространяется под лицензией MIT. Инструмент разработан специально для работы с проектом "RPG終章" и может потребовать модификации для использования с другими проектами RPG Maker.
+*This tool was created to streamline text editing for MGQP and may require modifications for use with other RPG Maker projects.*
