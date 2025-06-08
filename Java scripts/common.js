@@ -5,7 +5,7 @@ let currentMode = "RUS"; // Текущий язык
 let currentTab = "library"; // Текущая вкладка
 let maxLineLengthRus = 39;
 let maxLineLengthJap = 22;
-let maxLineLengthJobChangeVar = 30; // Лимит строки для JobChange
+let maxLineLengthJobChangeVar = 66; // Лимит строки для JobChange
 let maxLineLengthMap = 50; // Лимит строки для Map
 let isCompileMode = false; // Режим прямой компиляции
 
@@ -226,6 +226,100 @@ function escapeQuotes(str) {
  */
 function getCurrentMaxLineLength() {
   return currentMode === "JAP" ? maxLineLengthJap : maxLineLengthRus;
+}
+
+/**
+ * Разбивает текст на строки с учетом максимальной длины и языка
+ * @param {string} text - Исходный текст
+ * @param {number} maxLen - Максимальная длина строки
+ * @param {string} lang - Язык текста ("RUS" или "JAP")
+ * @returns {Array} - Массив строк
+ */
+function wrapText(text, maxLen, lang) {
+  try {
+    if (lang === "JAP") {
+      // Японский текст: разбиваем по символам
+      let lines = [];
+      for (let i = 0; i < text.length; i += maxLen) {
+        lines.push(text.substr(i, maxLen));
+      }
+      return lines;
+    } else {
+      // Русский текст: разбиваем по словам
+      const words = text.split(' ');
+      let lines = [];
+      let currentLine = '';
+      
+      for (let word of words) {
+        if ((currentLine.length ? currentLine.length + 1 : 0) + word.length <= maxLen) {
+          currentLine += (currentLine ? ' ' : '') + word;
+        } else {
+          lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      
+      return lines;
+    }
+  } catch (e) {
+    Logger.error('common', 'Ошибка при разбиении текста на строки', { text, maxLen, lang, error: e });
+    return [text]; // Возвращаем исходный текст как запасной вариант
+  }
+}
+
+// Специальная функция для форматирования текста вкладки JobChange
+function wrapTextJobChange(text, maxLen, lang) {
+  try {
+    if (lang === "JAP") {
+      // Японский текст: разбиваем по символам
+      let lines = [];
+      for (let i = 0; i < text.length; i += maxLen) {
+        let line = text.substr(i, maxLen);
+        // Добавляем пробелы до достижения максимальной длины
+        while (line.length < maxLen) {
+          line += ' ';
+        }
+        lines.push(line);
+      }
+      return lines;
+    } else {
+      // Русский текст: разбиваем по словам
+      const words = text.split(' ');
+      let lines = [];
+      let currentLine = '';
+      
+      for (let word of words) {
+        // Проверяем, поместится ли слово на текущую строку
+        if ((currentLine.length ? currentLine.length + 1 : 0) + word.length <= maxLen) {
+          currentLine += (currentLine ? ' ' : '') + word;
+        } else {
+          // Добавляем пробелы до достижения максимальной длины
+          while (currentLine.length < maxLen) {
+            currentLine += ' ';
+          }
+          lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      
+      // Обрабатываем последнюю строку
+      if (currentLine) {
+        while (currentLine.length < maxLen) {
+          currentLine += ' ';
+        }
+        lines.push(currentLine);
+      }
+      
+      return lines;
+    }
+  } catch (e) {
+    console.error("Error in wrapTextJobChange:", e);
+    return [text]; // Возвращаем исходный текст как запасной вариант
+  }
 }
 
 // Инициализация приложения при загрузке документа

@@ -189,7 +189,7 @@ function processJobChangeText(text) {
         let formattedDescription = [];
         if (block.description.length > 0) {
           let descText = block.description.join(' ');
-          formattedDescription = wrapText(descText, 
+          formattedDescription = wrapTextJobChange(descText, 
                                           currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength(), 
                                           currentMode);
         }
@@ -225,6 +225,9 @@ function processJobChangeText(text) {
         formattedAbilities.forEach(line => {
           result += `        "${escapeQuotes(line)}",\n`;
         });
+        
+        // Добавляем пустую строку после всех секций
+        result += `        "",\n`;
         
         result += `      ]],\n`;
       });
