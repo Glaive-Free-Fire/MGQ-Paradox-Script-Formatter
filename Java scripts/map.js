@@ -301,6 +301,22 @@ function fixMapErrors(text) {
     return `ShowChoices([[${cleanedChoices}], ${defaultChoice}])`;
   });
   
+  // НОВОЕ: Удаляем одиночный обратный слеш перед "] в ShowText
+  text = text.replace(/(ShowText\(\["[^\"]*)\\(\"]\))/g, '$1$2');
+  
+  // НОВОЕ: В строках PlaySE(["..."]) заменяем двойные слэши на одиночные до "])
+  text = text.replace(/PlaySE\(\["([\s\S]*?)"\]\)/g, function(match, content) {
+    // Заменяем \\ на \
+    const fixed = content.replace(/\\\\/g, '\\');
+    return `PlaySE(["${fixed}"])`;
+  });
+  
+  // НОВОЕ: В строках SetMoveRoute([ ... "]) заменяем двойные слэши на одиночные до "])
+  text = text.replace(/SetMoveRoute\(\[([^,]+),\s*"([\s\S]*?)"\]\)/g, function(match, num, content) {
+    const fixed = content.replace(/\\\\/g, '\\');
+    return `SetMoveRoute([${num}, "${fixed}"])`;
+  });
+  
   Logger.debug('map', 'Исправление ошибок завершено');
   return text;
 }
