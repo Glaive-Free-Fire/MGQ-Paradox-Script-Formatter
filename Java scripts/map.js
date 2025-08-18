@@ -160,6 +160,9 @@ function fixMapErrors(text) {
   // НОВОЕ: Исправляем опечатку ShowTex
   text = text.replace(/ShowTex\(\["([^"]*)"\]\)/g, 'ShowText(["$1"])');
   
+  // ИСПРАВЛЕНО: Заменяем ошибочный префикс ["< на ["\\n< перед тегом имени
+  text = text.replace(/(\["<)(\\C\[\d+\])/g, '["\\\\n<$2');
+  
   // НОВОЕ: Исправляем неправильно экранированные управляющие коды
   text = text.replace(/\\n<\\C\[(\d+)\]([^>]*)>/g, '\\n<\\C[$1]>$2');
   
@@ -315,6 +318,31 @@ function fixMapErrors(text) {
   text = text.replace(/SetMoveRoute\(\[([^,]+),\s*"([\s\S]*?)"\]\)/g, function(match, num, content) {
     const fixed = content.replace(/\\\\/g, '\\');
     return `SetMoveRoute([${num}, "${fixed}"])`;
+  });
+  
+  // НОВОЕ: Исправляем отсутствующие заголовки Name для блоков CommonEvent
+  text = text.replace(/^(CommonEvent\s+\d+)\s*$/gm, function(match, commonEventLine) {
+    // Проверяем, есть ли уже заголовок Name в следующей строке
+    const lines = text.split('\n');
+    const currentIndex = lines.findIndex(line => line.trim() === match.trim());
+    
+    if (currentIndex !== -1 && currentIndex + 1 < lines.length) {
+      const nextLine = lines[currentIndex + 1].trim();
+      // Если следующая строка не содержит Name =, добавляем заголовок
+      if (!nextLine.startsWith('Name =') && !nextLine.startsWith('Display Name =') && !nextLine.startsWith('Parallax Name =') && !nextLine.startsWith('Note =')) {
+        // Извлекаем номер события из строки CommonEvent
+        const eventNumber = commonEventLine.match(/CommonEvent\s+(\d+)/);
+        if (eventNumber) {
+          const eventNum = eventNumber[1];
+          // Формируем имя события в формате EV001, EV002 и т.д.
+          const eventName = `EV${eventNum.padStart(3, '0')}`;
+          // Добавляем заголовок Name и сохраняем пустую строку для разделения блоков
+          return `${commonEventLine}\nName = "${eventName}"\n`;
+        }
+      }
+    }
+    
+    return match;
   });
   
   Logger.debug('map', 'Исправление ошибок завершено');
