@@ -74,7 +74,8 @@ function formatWithWideSpaces(categoryName, inputLines, maxLineLength) {
   }
   
   // Step 3: Format with line length constraints
-  let currentLine = `${categoryName}: `;
+  // Убираем двоеточие из categoryName, так как оно уже есть в исходном тексте
+  let currentLine = `${categoryName.replace(":", "")}: `;
   let firstItem = true;
   
   items.forEach(item => {
@@ -116,7 +117,8 @@ function processJobChangeText(text) {
       let lines = text.split('\n');
       let blocks = [];
       let currentBlock = null;
-      
+      let currentSection = 'description'; // Отслеживаем текущую секцию
+
       for (let line of lines) {
         if (line.trim().match(/^\d+\s*#/)) {
           if (currentBlock) blocks.push(currentBlock);
@@ -127,41 +129,37 @@ function processJobChangeText(text) {
             skills: [],
             abilities: []
           };
+          currentSection = 'description'; // Сбрасываем секцию для нового блока
         } else if (currentBlock) {
-          // Add line to appropriate section based on content
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
-          
-          // Check for categories with both colon types
-          if (trimmedLine.match(/^Экипировка[：:]/)) {
+
+          // Парсер, который теперь работает корректно
+          if (trimmedLine.match(/^\s*Экипировка[：:]/i) || trimmedLine.match(/^\s*装備武器[：:]/i)) {
+            currentSection = 'equipment';
             currentBlock.equipment.push(trimmedLine);
-          } else if (trimmedLine.match(/^　+/) && currentBlock.equipment.length > 0 && 
-                    currentBlock.skills.length === 0 && currentBlock.abilities.length === 0) {
-            // Indented continuation of equipment
-            currentBlock.equipment.push(trimmedLine);
-          } else if (trimmedLine.match(/^Навыки[：:]/)) {
+          } else if (trimmedLine.match(/^\s*Навыки[：:]/i) || trimmedLine.match(/^\s*スキル[：:]/i)) {
+            currentSection = 'skills';
             currentBlock.skills.push(trimmedLine);
-          } else if (trimmedLine.match(/^　+/) && currentBlock.skills.length > 0 && 
-                    currentBlock.abilities.length === 0) {
-            // Indented continuation of skills
-            currentBlock.skills.push(trimmedLine);
-          } else if (trimmedLine.match(/^Способности[：:]/i) || trimmedLine.match(/^Способность[：:]/i)) {
+          } else if (trimmedLine.match(/^\s*(Способность|Способности|アビリティ)[：:]/i)) {
+            currentSection = 'abilities';
             currentBlock.abilities.push(trimmedLine);
-          } else if (trimmedLine.match(/^　+/) && currentBlock.abilities.length > 0) {
-            // Indented continuation of abilities
-            currentBlock.abilities.push(trimmedLine);
-          } else if (currentBlock.abilities.length > 0) {
-            // Non-indented continuation of abilities section
-            currentBlock.abilities.push(trimmedLine);
-          } else if (currentBlock.skills.length > 0) {
-            // Non-indented continuation of skills section
-            currentBlock.skills.push(trimmedLine);
-          } else if (currentBlock.equipment.length > 0) {
-            // Non-indented continuation of equipment section
-            currentBlock.equipment.push(trimmedLine);
           } else {
-            // This is part of the description
-            currentBlock.description.push(trimmedLine);
+            // Добавляем строку в текущую активную секцию
+            switch (currentSection) {
+              case 'equipment':
+                currentBlock.equipment.push(trimmedLine);
+                break;
+              case 'skills':
+                currentBlock.skills.push(trimmedLine);
+                break;
+              case 'abilities':
+                currentBlock.abilities.push(trimmedLine);
+                break;
+              default: // 'description'
+                currentBlock.description.push(trimmedLine);
+                break;
+            }
           }
         }
       }
@@ -194,13 +192,35 @@ function processJobChangeText(text) {
                                           currentMode);
         }
         
-        // Format all sections
         const maxLen = currentTab === "jobchange" ? maxLineLengthJobChangeVar : getCurrentMaxLineLength();
-        let formattedEquipment = formatWithWideSpaces("Экипировка:", block.equipment, maxLen);
-        let formattedSkills = formatWithWideSpaces("Навыки:", block.skills, maxLen);
         
-        // Special processing for abilities
-        let formattedAbilities = formatAbilitiesSection(block.abilities, maxLen);
+        // --- ИСПРАВЛЕНИЕ ДЛЯ ЯПОНСКИХ ЗАГОЛОВКОВ ---
+
+        // 1. Динамически определяем заголовок для Экипировки
+        let equipmentCategoryName = "Экипировка:"; 
+        if (block.equipment.length > 0) {
+            const match = block.equipment[0].match(/^\s*([^：:]+[：:])/);
+            if (match) equipmentCategoryName = match[1];
+        }
+
+        // 2. Динамически определяем заголовок для Навыков
+        let skillsCategoryName = "Навыки:";
+        if (block.skills.length > 0) {
+            const match = block.skills[0].match(/^\s*([^：:]+[：:])/);
+            if (match) skillsCategoryName = match[1];
+        }
+
+        // 3. Динамически определяем заголовок для Способностей
+        let abilitiesCategoryName = "Способности:";
+        if (block.abilities.length > 0) {
+            const match = block.abilities[0].match(/^\s*([^：:]+[：:])/);
+            if (match) abilitiesCategoryName = match[1];
+        }
+
+        // 4. Передаем в функцию ПРАВИЛЬНЫЕ заголовки
+        let formattedEquipment = formatWithWideSpaces(equipmentCategoryName, block.equipment, maxLen);
+        let formattedSkills = formatWithWideSpaces(skillsCategoryName, block.skills, maxLen);
+        let formattedAbilities = formatWithWideSpaces(abilitiesCategoryName, block.abilities, maxLen);
         
         // Build result with proper indentation
         result += `    ${id} => ${title}\n      [[\n`;
@@ -253,9 +273,7 @@ function formatCategoryWithJapaneseStyle(lines, maxLineLength) {
       if (!categoryMatch) return []; // No category found
       
       let categoryName = categoryMatch[1];
-      if (categoryName === "Способность") {
-        categoryName = "Способности"; // Normalize to plural form
-      }
+      // Не нормализуем "Способность" к "Способности", сохраняем оригинальное название
       
       // Detect if the input already has the category name with either colon style
       const hasDuplicateCategory = firstLine.indexOf(categoryName + ":") === 0 || 
@@ -268,7 +286,7 @@ function formatCategoryWithJapaneseStyle(lines, maxLineLength) {
       else if (categoryName === "Навыки") {
         return formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory);
       }
-      else if (categoryName === "Способности") {
+      else if (categoryName === "Способности" || categoryName === "Способность") {
         return formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategory);
       }
       
@@ -314,7 +332,8 @@ function formatEquipment(categoryName, lines, maxLineLength, hasDuplicateCategor
     if (items.length === 0) return [];
     
     // Process items
-    let currentLine = categoryName + ": " + items[0];
+    // Убираем двоеточие из categoryName, так как оно уже есть в исходном тексте
+    let currentLine = categoryName.replace(":", "") + ": " + items[0];
     
     for (let i = 1; i < items.length; i++) {
       // Check if adding this item would exceed the line length
@@ -371,7 +390,8 @@ function formatSkills(categoryName, lines, maxLineLength, hasDuplicateCategory) 
     }
     
     // Process skill items
-    let currentLine = categoryName + ": " + skillItems[0];
+    // Убираем двоеточие из categoryName, так как оно уже есть в исходном тексте
+    let currentLine = categoryName.replace(":", "") + ": " + skillItems[0];
     
     for (let i = 1; i < skillItems.length; i++) {
       if ((currentLine.length + 1 + skillItems[i].length + 1) <= maxLineLength) {
@@ -396,14 +416,23 @@ function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategor
     const indent = "			   "; // Standard indentation
     let result = [];
     
-    // Collect all ability text
+    // Определяем правильное название раздела из исходного текста
+    if (lines.length > 0) {
+        const firstLine = lines[0].trim();
+        const abilityMatch = firstLine.match(/^(Способности?)[：:]/);
+        if (abilityMatch) {
+            categoryName = abilityMatch[1] + ":";
+        }
+    }
+    
+    // Collect all skill text
     let fullText = "";
     
     lines.forEach((line, index) => {
       let content = line.trim();
       if (index === 0) {
         // Remove the category prefix from the first line
-        content = content.replace(/^(Способности[：:])\s*/, "");
+        content = content.replace(/^(Способности?[：:])\s*/, "");
       }
       // Add a space between lines to ensure proper separation
       fullText += (index > 0 ? " " : "") + content;
@@ -438,7 +467,8 @@ function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategor
     abilities = abilities.filter(ability => ability && ability.trim().length > 0);
     
     // Start with category name
-    let currentLine = categoryName + ": ";
+    // Убираем двоеточие из categoryName, так как оно уже есть в исходном тексте
+    let currentLine = categoryName.replace(":", "") + ": ";
     let firstAbility = true;
     
     // Process each ability using the line length limit
@@ -464,75 +494,17 @@ function formatAbilities(categoryName, lines, maxLineLength, hasDuplicateCategor
     }
     
     // Add the last line if it has content
-    if (currentLine && currentLine !== (categoryName + ": ")) {
+    if (currentLine && currentLine !== (categoryName.replace(":", "") + ": ")) {
       result.push(currentLine);
-    } else if (abilities.length === 0 && currentLine === (categoryName + ": ")) {
+    } else if (abilities.length === 0 && currentLine === (categoryName.replace(":", "") + ": ")) {
       // If we have no abilities, add "Нет" for "None"
-      result.push(categoryName + ": Нет");
+      result.push(categoryName.replace(":", "") + ": Нет");
     }
     
     return result;
 }
 
-// Специальная функция для обработки блока способностей
-function formatAbilitiesSection(inputLines, maxLineLength) {
-    const categoryName = "Способности:";
-    const result = [];
-    
-    // Process all input lines
-    let firstLineProcessed = false;
-    let currentLine = categoryName + " ";
-    
-    for (let i = 0; i < inputLines.length; i++) {
-      let line = inputLines[i].trim();
-      if (!line) continue;
-      
-      // Process first line to remove category name
-      if (!firstLineProcessed) {
-        line = line.replace(/^Способности[：:]\s*/, "");
-        firstLineProcessed = true;
-      }
-      
-      // Split this line by wide spaces
-      const parts = line.split('　');
-      
-      for (let j = 0; j < parts.length; j++) {
-        let part = parts[j].trim();
-        if (!part) continue;
-        
-        // For first item in the section
-        if (currentLine === categoryName + " ") {
-          currentLine += part;
-        } 
-        // If item fits on current line
-        else if ((currentLine.length + 1 + part.length + 1) <= maxLineLength) {
-          currentLine += "　" + part;
-        } 
-        // Start a new line if doesn't fit
-        else {
-          result.push(currentLine);
-          currentLine = part;
-        }
-      }
-      
-      // Only add space between lines if needed
-      if (i < inputLines.length - 1 && !currentLine.endsWith(" ")) {
-        currentLine += " ";
-      }
-    }
-    
-    // Add final line if it has content
-    if (currentLine && currentLine !== categoryName + " ") {
-      result.push(currentLine);
-    }
-    
-    // Special case for "none"
-    if (result.length === 0) {
-      result.push(categoryName + " Нет");
-    }
-    
-    return result;
-}
+
 
 // Парсинг блоков JobChange
 function parseJobChangeBlocks(content) {
