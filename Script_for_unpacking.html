@@ -35,6 +35,7 @@
         <button class="tab-btn active" data-tab="jobchange">JobChange</button>
         <button class="tab-btn" data-tab="library">Library(Enemy)</button>
         <button class="tab-btn" data-tab="medal">Library(Medal)</button>
+        <button class="tab-btn" data-tab="follower">Follower</button>
     </div>
 
     <div class="container">
@@ -167,6 +168,59 @@
                     if (priorityMatch) result += "      :priority => " + priorityMatch[1] + ",\n";
                     result += "},";
                     
+                    return result;
+                }).join("\n\n");
+            },
+            follower: function(input) {
+                // Разбиваем входной текст на записи
+                const entries = input.split(/(?=^\s*\d+\s*=>\s*\{)/m)
+                                     .map(e => e.trim())
+                                     .filter(e => e.length > 0);
+                
+                return entries.map(entry => {
+                    // Извлекаем номер записи
+                    const numberMatch = entry.match(/^\s*(\d+)\s*=>/);
+                    if (!numberMatch) return "Ошибка: неверный формат заголовка";
+                    const number = numberMatch[1];
+
+                    // Извлекаем значения полей
+                    const actorIdMatch = entry.match(/:actor_id\s*=>\s*(\d+),/);
+                    const denominatorMatch = entry.match(/:denominator\s*=>\s*(\d+),/);
+                    const questionMatch = entry.match(/:question\s*=>\s*\[(.*?)\],/s);
+                    const yesMatch = entry.match(/:yes\s*=>\s*\[(.*?)\],/s);
+                    const noMatch = entry.match(/:no\s*=>\s*\[(.*?)\],/s);
+
+                    if (!actorIdMatch || !denominatorMatch || !questionMatch || !yesMatch || !noMatch) {
+                        return "Ошибка: неполные данные";
+                    }
+
+                    // Обрабатываем массивы диалогов
+                    const processDialogArray = (arrayStr) => {
+                        const matches = arrayStr.match(/"([^"]+)",\s*"([^"]+)",\s*(\d+)/);
+                        if (!matches) return "";
+                        return `${matches[2]}, ${matches[3]}`;
+                    };
+
+                    // Извлекаем заголовок (название)
+                    const titleMatch = entry.match(/#\s*([^\n]+)/);
+                    const title = titleMatch ? titleMatch[1].trim() : "";
+
+                    // Формируем результат
+                    let result = `${actorIdMatch[1]}, ${denominatorMatch[1]}, ${questionMatch[1].match(/"([^"]+)",\s*"([^"]+)",\s*(\d+)/)[3]} ${processDialogArray(questionMatch[1])} ${processDialogArray(yesMatch[1])} ${processDialogArray(noMatch[1])}\n`;
+                    result += `${number} # ${title}\n`;
+                    
+                    // Добавляем диалоги
+                    const addDialog = (arrayStr) => {
+                        const matches = arrayStr.match(/"([^"]+)"/);
+                        if (matches) {
+                            result += `["${matches[1]}"]\n`;
+                        }
+                    };
+                    
+                    addDialog(questionMatch[1]);
+                    addDialog(yesMatch[1]);
+                    addDialog(noMatch[1]);
+
                     return result;
                 }).join("\n\n");
             }

@@ -38,8 +38,10 @@ function initializeApp() {
       
       // Показываем/скрываем элементы в зависимости от выбранной вкладки
       const skillsFileContainer = document.getElementById('skills-file-container');
+      const itemsFileContainer = document.getElementById('items-file-container');
       const lengthControlContainer = document.getElementById('length-control');
       const processSkillBtn = document.getElementById('process-skill-btn');
+      const processItemsBtn = document.getElementById('process-items-btn');
       const outputContainer = document.querySelector('.output');
       const copyBtn = document.getElementById('copy-btn');
       const langControls = document.getElementById('lang-controls');
@@ -49,6 +51,8 @@ function initializeApp() {
         // Скрываем ненужные элементы для вкладки Skill Replacer
         if (skillsFileContainer) skillsFileContainer.style.display = 'flex';
         if (processSkillBtn) processSkillBtn.style.display = 'inline-block';
+        if (itemsFileContainer) itemsFileContainer.style.display = 'none';
+        if (processItemsBtn) processItemsBtn.style.display = 'none';
         if (lengthControlContainer) lengthControlContainer.style.display = 'none';
         if (outputContainer) outputContainer.style.display = 'none';
         if (copyBtn) copyBtn.style.display = 'none';
@@ -58,15 +62,30 @@ function initializeApp() {
         // Показываем элементы управления библиотекой для вкладки Library(Enemy)
         if (skillsFileContainer) skillsFileContainer.style.display = 'none';
         if (processSkillBtn) processSkillBtn.style.display = 'none';
+        if (itemsFileContainer) itemsFileContainer.style.display = 'none';
+        if (processItemsBtn) processItemsBtn.style.display = 'none';
         if (lengthControlContainer) lengthControlContainer.style.display = 'flex';
         if (outputContainer) outputContainer.style.display = 'block';
         if (copyBtn) copyBtn.style.display = 'inline-block';
         if (langControls) langControls.style.display = 'block'; // Показываем выбор языка
         if (compileModeBtn) compileModeBtn.style.display = 'block'; // Показываем кнопку режима компиляции
+      } else if (currentTab === "items") {
+        if (skillsFileContainer) skillsFileContainer.style.display = 'none';
+        if (processSkillBtn) processSkillBtn.style.display = 'none';
+        if (itemsFileContainer) itemsFileContainer.style.display = 'flex';
+        if (processItemsBtn) processItemsBtn.style.display = 'inline-block';
+        if (lengthControlContainer) lengthControlContainer.style.display = 'none';
+        if (outputContainer) outputContainer.style.display = 'block';
+        if (copyBtn) copyBtn.style.display = 'inline-block';
+        if (langControls) langControls.style.display = 'none';
+        if (compileModeBtn) compileModeBtn.style.display = 'none';
+        updateOutput();
       } else {
         // Возвращаем отображение элементов для других вкладок
         if (skillsFileContainer) skillsFileContainer.style.display = 'none';
         if (processSkillBtn) processSkillBtn.style.display = 'none';
+        if (itemsFileContainer) itemsFileContainer.style.display = 'none';
+        if (processItemsBtn) processItemsBtn.style.display = 'none';
         if (lengthControlContainer) lengthControlContainer.style.display = 'flex';
         if (outputContainer) outputContainer.style.display = 'block';
         if (copyBtn) copyBtn.style.display = 'inline-block';
@@ -104,6 +123,12 @@ function initializeApp() {
   
   // Явно добавляем обработчик для кнопки Skill Replacer
   document.getElementById('process-skill-btn').addEventListener('click', processSkillReplacer);
+  
+  // Явно добавляем обработчик для кнопки Items
+  const processItemsBtnInit = document.getElementById('process-items-btn');
+  if (processItemsBtnInit) {
+    processItemsBtnInit.addEventListener('click', handleJapaneseItemsFile);
+  }
   
   // Обработчик для кнопки режима компиляции
   document.getElementById('compile-mode-btn').addEventListener('click', toggleCompileMode);
@@ -201,6 +226,8 @@ function updateOutput() {
     } else if (currentTab === "map") {
       Logger.info('common', 'Вызов обработки текста карты');
       output = processMapText(inputText);
+    } else if (currentTab === "items") {
+      output = processItemsText(inputText);
     }
     
     document.getElementById('output-content').textContent = output;

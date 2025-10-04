@@ -138,6 +138,7 @@
         <button class="tab-btn" data-mode="skillreplacer">Skill Replacer</button>
         <button class="tab-btn" data-mode="follower">Follower</button>
         <button class="tab-btn" data-mode="map">Map</button>
+        <button class="tab-btn" data-mode="items">Items</button>
     </div>
 
     <!-- Кнопки выбора языка -->
@@ -177,6 +178,12 @@
             <button id="process-skill-btn">Обработать Skills</button>
         </div>
         
+        <div id="items-file-container" style="display: none; margin-top: 10px; align-items: center; gap: 10px; justify-content: center;">
+            <label>Файл Items.txt (JAP): </label>
+            <input type="file" id="items-file-input" accept=".txt">
+            <button id="process-items-btn" style="display: none; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">Сопоставить ранги</button>
+        </div>
+        
         <!-- Library Updater controls, скрыто, т.к. дублирует "Компилировать данные" -->
         <!-- <div id="library-updater-container" style="display: none; margin-top: 10px; align-items: center; gap: 10px; justify-content: center;">
             <label>Файл Library: </label>
@@ -193,6 +200,7 @@
     <script src="Java scripts/skillreplacer.js"></script>
     <script src="Java scripts/follower.js"></script>
     <script src="Java scripts/map.js"></script>
+    <script src="Java scripts/items.js"></script>
     <script src="Java scripts/common.js"></script>
     <script src="Java scripts/other.js"></script>
 </body>
