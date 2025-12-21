@@ -426,161 +426,146 @@ function updateFileContent(content, newBlocks, isDirectCall = false) {
   
   try {
     let newContent = '';
-    let updatedCount = 0;
-    
-    // Определяем тип файла и формат
-    let fileType = '';
-    let fileStartFormat = '';
-    let fileEndFormat = '';
-    
+
+    // === СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ LIBRARY ===
+    // Файл Library имеет сложную структуру (несколько словарей),
+    // поэтому мы используем специализированный парсер из library.js
     if (currentTab === "library") {
-      fileType = "library";
-      fileStartFormat = "module NWConst::Enemy\n  ENEMY = {\n";
-      fileEndFormat = "  }\nend\n";
-    } else if (currentTab === "jobchange") {
-      fileType = "jobchange";
-      fileStartFormat = "module NWConst::JobChange\n  JOB_CHANGE = {\n";
-      fileEndFormat = "  }\nend\n";
-    } else if (currentTab === "medal") {
-      fileType = "medal";
-      fileStartFormat = "module NWConst::Medal\n  MEDAL = {\n";
-      fileEndFormat = "  }\nend\n";
-    } else if (currentTab === "follower") {
-      fileType = "follower";
-      fileStartFormat = ""; // Не добавляем начало файла для Follower
-      fileEndFormat = ""; // Не добавляем конец файла для Follower
+      Logger.info('other', 'Делегирование обработки в processLibraryFile');
+      // processLibraryFile ожидает строку, а не массив, поэтому соединяем блоки
+      const blocksString = newBlocks.join("\n\n");
+      
+      // Вызываем функцию из library.js. 
+      // Передаем false для isDirectCall, чтобы получить строку назад, а не скачивать сразу.
+      if (typeof processLibraryFile === 'function') {
+        newContent = processLibraryFile(content, blocksString, false);
+        
+        if (!newContent) {
+           throw new Error("processLibraryFile вернул пустой результат");
+        }
+      } else {
+        throw new Error("Функция processLibraryFile не найдена. Проверьте подключение library.js");
+      }
+    
     } else {
-      Logger.error('other', 'Неподдерживаемая вкладка для компиляции', { currentTab });
-      throw new Error("Неподдерживаемая вкладка для компиляции");
-    }
-    
-    Logger.debug('other', 'Параметры форматирования файла', {
-      fileType,
-      hasStartFormat: !!fileStartFormat,
-      hasEndFormat: !!fileEndFormat
-    });
-    
-    // Добавляем начало файла только если это не вкладка Follower
-    if (currentTab !== "follower") {
-      newContent += fileStartFormat;
-    }
-    
-    // Создаем карту новых блоков для быстрого доступа
-    const newBlocksMap = {};
-    newBlocks.forEach(block => {
-      const idMatch = block.match(/^\s*(\d+)\s*=>/);
-      if (idMatch) {
-        newBlocksMap[idMatch[1]] = block;
-      }
-    });
-    
-    Logger.debug('other', 'Создана карта блоков', {
-      blockCount: Object.keys(newBlocksMap).length
-    });
-    
-    // Разбиваем содержимое на строки
-    const lines = content.split('\n');
-    let result = [];
-    let currentBlock = [];
-    let currentBlockId = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
+      // === СТАНДАРТНАЯ ОБРАБОТКА ДЛЯ ДРУГИХ ФАЙЛОВ ===
       
-      // Пропускаем начало и конец файла
-      if ((fileStartFormat && trimmedLine === fileStartFormat.trim()) || 
-          (fileEndFormat && trimmedLine === fileEndFormat.trim())) {
-        continue;
+      let fileStartFormat = '';
+      let fileEndFormat = '';
+      let updatedCount = 0;
+      
+      if (currentTab === "jobchange") {
+        fileStartFormat = "module NWConst::JobChange\n  JOB_CHANGE = {\n";
+        fileEndFormat = "  }\nend\n";
+      } else if (currentTab === "medal") {
+        fileStartFormat = "module NWConst::Medal\n  MEDAL = {\n";
+        fileEndFormat = "  }\nend\n";
+      } else if (currentTab === "follower") {
+        fileStartFormat = ""; 
+        fileEndFormat = ""; 
+      } else {
+        // Если вдруг попали сюда с неизвестной вкладкой
+        Logger.error('other', 'Неподдерживаемая вкладка для компиляции', { currentTab });
+        throw new Error("Неподдерживаемая вкладка для компиляции");
       }
       
-      // Проверяем, является ли строка началом блока
-      const blockStartMatch = trimmedLine.match(/^\s*(\d+)\s*=>/);
+      // Добавляем начало файла (кроме Follower)
+      if (currentTab !== "follower") {
+        newContent += fileStartFormat;
+      }
       
-      if (blockStartMatch) {
-        // Если у нас уже есть блок, добавляем его в результат
-        if (currentBlock.length > 0) {
-          result.push(...currentBlock);
-          currentBlock = [];
+      // Создаем карту новых блоков
+      const newBlocksMap = {};
+      newBlocks.forEach(block => {
+        const idMatch = block.match(/^\s*(\d+)\s*=>/);
+        if (idMatch) {
+          newBlocksMap[idMatch[1]] = block;
+        }
+      });
+      
+      // Разбиваем содержимое на строки и обрабатываем (логика стандартного режима)
+      const lines = content.split('\n');
+      let result = [];
+      let currentBlock = [];
+      let currentBlockId = null;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+        
+        // Пропускаем начало и конец файла при чтении, так как добавим их сами
+        if ((fileStartFormat && trimmedLine === fileStartFormat.trim()) || 
+            (fileEndFormat && trimmedLine === fileEndFormat.trim())) {
+          continue;
         }
         
-        currentBlockId = blockStartMatch[1];
-        currentBlock.push(line);
-      } else if (currentBlockId) {
-        // Если мы внутри блока
-        currentBlock.push(line);
+        // Поиск начала блока
+        const blockStartMatch = trimmedLine.match(/^\s*(\d+)\s*=>/);
         
-        // Проверяем, является ли эта строка концом блока
-        if (trimmedLine === "}," || trimmedLine === "}") {
-          // Если есть обновленная версия блока, используем её
-          if (newBlocksMap[currentBlockId]) {
-            result.push(newBlocksMap[currentBlockId]);
-            updatedCount++;
-            Logger.debug('other', 'Блок обновлен', { blockId: currentBlockId });
-          } else {
+        if (blockStartMatch) {
+          if (currentBlock.length > 0) {
             result.push(...currentBlock);
+            currentBlock = [];
           }
-          currentBlock = [];
-          currentBlockId = null;
+          currentBlockId = blockStartMatch[1];
+          currentBlock.push(line);
+        } else if (currentBlockId) {
+          currentBlock.push(line);
+          // Поиск конца блока
+          if (trimmedLine === "}," || trimmedLine === "}") {
+            if (newBlocksMap[currentBlockId]) {
+              result.push(newBlocksMap[currentBlockId]);
+              updatedCount++;
+            } else {
+              result.push(...currentBlock);
+            }
+            currentBlock = [];
+            currentBlockId = null;
+          }
+        } else {
+          result.push(line);
         }
-      } else {
-        // Если мы не внутри блока
-        result.push(line);
       }
-    }
-    
-    // Добавляем последний блок, если он есть
-    if (currentBlock.length > 0) {
-      if (currentBlockId && newBlocksMap[currentBlockId]) {
-        result.push(newBlocksMap[currentBlockId]);
-        updatedCount++;
-        Logger.debug('other', 'Последний блок обновлен', { blockId: currentBlockId });
-      } else {
-        result.push(...currentBlock);
+      
+      if (currentBlock.length > 0) {
+        if (currentBlockId && newBlocksMap[currentBlockId]) {
+          result.push(newBlocksMap[currentBlockId]);
+        } else {
+          result.push(...currentBlock);
+        }
       }
+      
+      newContent += '\n' + result.join('\n');
+      
+      if (currentTab !== "follower" && fileEndFormat) {
+        newContent += fileEndFormat;
+      }
+      
+      newContent = removeEmptyLinesBetweenBlocks(newContent);
     }
-    
-    // Собираем финальный результат
-    newContent += '\n' + result.join('\n');
-    
-    // Добавляем окончание файла только если это не вкладка Follower
-    if (currentTab !== "follower" && fileEndFormat) {
-      newContent += fileEndFormat;
-    }
-    
-    // Удаляем пустые строки между блоками
-    newContent = removeEmptyLinesBetweenBlocks(newContent);
-    
-    Logger.info('other', 'Обновление файла завершено', { 
-      updatedBlocks: updatedCount,
-      totalBlocks: Object.keys(newBlocksMap).length
-    });
-    
-    // Проверяем, вызван ли метод напрямую
+
+    // === СОХРАНЕНИЕ ФАЙЛА (ОБЩЕЕ ДЛЯ ВСЕХ РЕЖИМОВ) ===
     if (isDirectCall) {
-      // Создаем новый файл с обновленным содержимым
       const blob = new Blob([newContent], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
-      
-      // Создаем ссылку для скачивания
       const a = document.createElement('a');
       a.href = url;
-      a.download = `updated_${FILE_NAMES[currentTab]}`;
+      // Используем правильное имя файла из FILE_NAMES или генерируем
+      const baseName = FILE_NAMES[currentTab] || `${currentTab}.rb`;
+      a.download = `updated_${baseName}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      Logger.info('other', 'Файл успешно сохранен', { 
-        fileName: `updated_${FILE_NAMES[currentTab]}`
-      });
+      Logger.info('other', 'Файл успешно сохранен');
       showStatusMessage("Файл успешно обновлен и сохранен");
     }
     
     return newContent;
   } catch (e) {
     Logger.error('other', 'Ошибка при обновлении файла', e);
-    showStatusMessage('Ошибка при обновлении файла', true);
+    showStatusMessage('Ошибка при обновлении файла: ' + e.message, true);
     return null;
   }
 }
