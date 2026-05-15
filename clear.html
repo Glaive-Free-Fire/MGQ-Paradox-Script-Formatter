@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Инструменты для текста</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 250px;
+      font-family: monospace;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+    }
+
+    .half-height {
+      height: 150px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    #output,
+    #outputMerge,
+    #outputMatch,
+    #outputColorFix {
+      white-space: pre-wrap;
+      background: #f8f8f8;
+      padding: 10px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      min-height: 100px;
+      font-family: monospace;
+    }
+
+    #outputExtract {
+      width: 100%;
+      height: 500px;
+      white-space: pre-wrap;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+    }
+
+    .input-label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .settings-panel {
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      border: 1px solid #ced4da;
+    }
+
+    .resolution-panel {
+      margin-top: 20px;
+      border-top: 2px dashed #ccc;
+      padding-top: 20px;
+    }
+
+    .conflict-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: #f8f9fa;
+      padding: 15px;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+      align-items: stretch;
+    }
+
+    .conflict-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .conflict-col h4 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #495057;
+    }
+
+    .conflict-text {
+      flex-grow: 1;
+      width: 100%;
+      box-sizing: border-box;
+      resize: vertical;
+      font-family: monospace;
+      padding: 8px;
+    }
+
+    .conflict-center {
+      flex: 1.2;
+      border-left: 2px solid #ccc;
+      border-right: 2px solid #ccc;
+      padding: 0 15px;
+    }
+
+    .transfer-btn {
+      margin: 5px 0;
+      background-color: #e9ecef;
+      border: 1px solid #ced4da;
+      padding: 5px;
+      width: 100%;
+      font-weight: bold;
+    }
+    
+    .transfer-btn:hover {
+      background-color: #dde2e6;
+    }
+
+    .jp-context {
+      width: 100%;
+      background: #e3f2fd;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      box-sizing: border-box;
+    }
+
+    .variant-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .variant-card {
+      flex: 1 1 250px;
+      min-width: 200px;
+      background: #fff;
+      border: 1px solid #ced4da;
+      border-radius: 5px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .variant-card h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #495057;
+    }
+
+    .variant-files {
+      font-size: 11px;
+      color: #6c757d;
+      margin-bottom: 8px;
+      word-break: break-all;
+    }
+
+    .variant-text {
+      flex-grow: 1;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 3px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      min-height: 60px;
+      margin-bottom: 8px;
+    }
+
+    .variant-btn {
+      margin: 0;
+      padding: 6px 12px;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .conflict-row-allfiles {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .diff-highlight {
+      background: #ffc107;
+      padding: 1px 2px;
+      border-radius: 2px;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+
+<body>
+
+  <div style="margin-bottom: 18px;">
+    <button id="tabClear" onclick="showTab('clear')" style="font-weight:bold;">Очистка строк</button>
+    <button id="tabMerge" onclick="showTab('merge')">Объединение имён</button>
+    <button id="tabExtract" onclick="showTab('extract')">Извлечение сценария</button>
+    <button id="tabMatch" onclick="showTab('match')">Сопоставление данных</button>
+    <button id="tabTransclusion" onclick="showTab('transclusion')">Трансклюзия Данных</button>
+    <button id="tabDuplicates" onclick="showTab('duplicates')">Дубликаты Диалогов</button>
+  </div>
+
+  <div id="tabContentClear">
+    <h2>Очистка строк от префиксов, дубликатов и избыточных имён</h2>
+    <textarea id="input" placeholder="Вставьте сюда текст..."></textarea>
+    <br>
+    <button onclick="processText()">Очистить</button>
+    <button onclick="copyOutput()">Скопировать результат</button>
+    <h3>Результат:</h3>
+    <div id="output"></div>
+  </div>
+
+  <div id="tabContentMerge" style="display:none;">
+    <h2>Объединение строк с именами и репликами</h2>
+    <textarea id="inputMerge" placeholder="Вставьте сюда текст..."></textarea>
+    <br>
+    <button onclick="processMerge()">Объединить</button>
+    <button onclick="copyMergeOutput()">Скопировать результат</button>
+    <h3>Результат:</h3>
+    <div id="outputMerge"></div>
+  </div>
+
+  <div id="tabContentExtract" style="display:none;">
+    <h2>Выберите .txt файлы с картами:</h2>
+    
+    <div class="settings-panel">
+      <div style="margin-bottom: 10px;">
+        <input type="checkbox" id="textOnlyExtract" checked>
+        <label for="textOnlyExtract" style="font-weight: bold; cursor: pointer;">Text Only (Только текст)</label>
+        <br><small>Игнорировать команды вроде ChangeItems, actor_label и прочие технические параметры.</small>
+      </div>
+      <div>
+        <input type="checkbox" id="japOnlyExtract">
+        <label for="japOnlyExtract" style="font-weight: bold; cursor: pointer; color: #d9534f;">JAP Only (Только японский)</label>
+        <br><small>Извлекать только строки, содержащие японские символы (хирагана, катакана, кандзи).</small>
+      </div>
+    </div>
+
+    <input type="file" id="fileInput" multiple accept=".txt">
+    <button onclick="processFiles()">Обработать</button>
+    <button onclick="copyExtractOutput()">Скопировать текст</button>
+    <h3>Результат:</h3>
+    <textarea id="outputExtract" readonly></textarea>
+  </div>
+
+  <div id="tabContentMatch" style="display:none;">
+    <h2>Замена данных (Сопоставление по заголовкам)</h2>
+
+    <div class="settings-panel">
+      <label for="fieldsToReplace" class="input-label">Какие поля заменять (через запятую):</label>
+      <input type="text" id="fieldsToReplace" value="Note" style="width: 100%; padding: 8px; font-family: monospace;"
+        placeholder="Например: Note, Name, ShowText, ShowTextAttributes">
+      <small>Скрипт группирует строки в блоки. Если в исходнике 5 строк ShowText, а в целевом 3 — весь блок будет
+        заменен на 5 новых строк.</small>
+      <div style="margin-top: 10px;">
+        <input type="checkbox" id="removeEmptyBlocks">
+        <label for="removeEmptyBlocks">Удалять Пустые Блоки</label>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">1. Источник данных (Откуда берем новые значения):</span>
+      <textarea id="inputSource" class="half-height"
+        placeholder="Вставьте текст с правильными данными (например, Note с переводом)..."></textarea>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">2. Целевой текст (Где меняем, сохраняя структуру):</span>
+      <textarea id="inputTarget" class="half-height"
+        placeholder="Вставьте оригинальный текст, который нужно обновить..."></textarea>
+    </div>
+
+    <button onclick="processMatch()">Заменить данные</button>
+    <button onclick="copyMatchOutput()">Скопировать результат</button>
+
+    <h3>3. Итоговый результат:</h3>
+    <div id="outputMatch"></div>
+  </div>
+
+  <div id="tabContentTransclusion" style="display:none;">
+    <h2>Трансклюзия Данных</h2>
+
+    <div class="settings-panel">
+      <label class="input-label">Правила связывания:</label>
+      <textarea id="transRules" style="height: 140px; font-family: monospace; width: 100%; box-sizing: border-box;" placeholder="Позиция
+&lt;Тег ID&gt; = ТипБлока ID
+
+Данные
+ПолеЦелевого = ПолеИсточника"></textarea>
+      <small>В разделе "Позиция" укажите тег в Note целевого файла (напр., <code>&lt;スキルセリフ ID&gt; = Actor ID</code>) и тип заголовка в файле-источнике. В разделе "Данные" по одному правилу на строку: <code>ПолеЦелевого = ПолеИсточника</code>.</small>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">1. Целевой файл (где меняем данные):</span>
+      <textarea id="transTarget" class="half-height" placeholder="Вставьте целевой файл (напр., Enemy)..."></textarea>
+    </div>
+
+    <div class="input-group">
+      <span class="input-label">2. Файл-источник (откуда берем данные):</span>
+      <textarea id="transSource" class="half-height" placeholder="Вставьте файл-источник (напр., Actor)..."></textarea>
+    </div>
+
+    <button onclick="processTransclusion()">Заменить данные</button>
+    <button onclick="copyTransclusionOutput()">Скопировать результат</button>
+
+    <h3>3. Итоговый результат:</h3>
+    <div id="outputTransclusion"></div>
+  </div>
+
+  <div id="tabContentDuplicates" style="display:none;">
+    <h2>Поиск расхождений в одинаковых диалогах</h2>
+
+    <div class="settings-panel">
+      <label style="font-weight: bold; margin-right: 15px;">Режим работы:</label>
+      <label style="cursor: pointer; margin-right: 15px;">
+        <input type="radio" name="dupMode" id="dupModeCompare" value="compare" checked onchange="toggleDupMode()">
+        Сопоставление с целевой картой
+      </label>
+      <label style="cursor: pointer;">
+        <input type="radio" name="dupMode" id="dupModeAllFiles" value="allfiles" onchange="toggleDupMode()">
+        Поиск дубликатов во всех файлах
+      </label>
+    </div>
+
+    <div id="dupCompareInputs" class="settings-panel" style="display: flex; gap: 20px;">
+      <div style="flex: 1; background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+        <h3>Источники (Можно несколько)</h3>
+        <label class="input-label">Японские файлы:</label>
+        <input type="file" id="dupJp1" accept=".txt" multiple style="margin-bottom: 10px;"><br>
+        <label class="input-label">Файлы перевода (RU):</label>
+        <input type="file" id="dupRu1" accept=".txt" multiple>
+      </div>
+
+      <div style="flex: 1; background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+        <h3>Целевая карта (Куда смотрим)</h3>
+        <label class="input-label">Японский файл:</label>
+        <input type="file" id="dupJp2" accept=".txt" multiple style="margin-bottom: 10px;"><br>
+        <label class="input-label">Файл перевода (RU):</label>
+        <input type="file" id="dupRu2" accept=".txt" multiple>
+      </div>
+    </div>
+
+    <div id="dupAllFilesInputs" class="settings-panel" style="display: none;">
+      <div style="display: flex; gap: 20px;">
+        <div style="flex: 1; background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+          <h3>Все Японские файлы</h3>
+          <label class="input-label">Загрузите японские оригиналы (сразу несколько):</label>
+          <input type="file" id="dupAllJp" accept=".txt" multiple>
+        </div>
+        <div style="flex: 1; background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+          <h3>Все Файлы перевода (RU)</h3>
+          <label class="input-label">Загрузите файлы перевода (сразу несколько):</label>
+          <input type="file" id="dupAllRu" accept=".txt" multiple>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 15px; margin-top: 15px;">
+      <input type="checkbox" id="sortByFile" checked>
+      <label for="sortByFile"> Сгруппировать отчет по именам файлов (Сначала все расхождения MapA, затем MapB...)</label>
+    </div>
+
+    <button onclick="processDuplicates()">Найти расхождения</button>
+    <button onclick="copyDuplicatesOutput()">Скопировать результат</button>
+
+    <h3>Результат (несовпадающие дубликаты):</h3>
+    <textarea id="outputDuplicates" style="width: 100%; height: 400px; white-space: pre-wrap;" readonly></textarea>
+
+    <div style="margin-top: 15px;">
+      <button id="btnStartFix" onclick="startFixingDuplicates()" style="display: none; background-color: #28a745; color: white; border: none;">🛠 Исправить Дубликаты</button>
+    </div>
+
+    <div id="resolutionArea" class="resolution-panel" style="display: none;">
+      <h2>Редактор Дубликатов</h2>
+      <p>Выберите подходящий вариант перевода стрелками или отредактируйте текст в центре.</p>
+      
+      <div id="conflictContainer"></div>
+
+      <button onclick="saveAndDownloadArchivedFiles()" style="background-color: #007bff; color: white; padding: 15px 30px; font-size: 18px; border: none; width: 100%; margin-top: 20px;">💾 Сохранить единый стандарт и скачать ZIP архив</button>
+    </div>
+  </div>
+
+  <script>
+    let globalRuFiles = {}; // Хранит оригинальный текст всех загруженных RU файлов
+    let globalConflicts = []; // Хранит данные о расхождениях для UI
+
+    // --- ОБЩАЯ ФУНКЦИЯ ДЛЯ УПРАВЛЕНИЯ ВКЛАДКАМИ ---
+    function showTab(tab) {
+      // Скрываем все
+      document.getElementById('tabContentClear').style.display = 'none';
+      document.getElementById('tabContentMerge').style.display = 'none';
+      document.getElementById('tabContentExtract').style.display = 'none';
+      document.getElementById('tabContentMatch').style.display = 'none';
+      document.getElementById('tabContentTransclusion').style.display = 'none';
+      document.getElementById('tabContentDuplicates').style.display = 'none';
+
+      // Сбрасываем жирность кнопок
+      document.getElementById('tabClear').style.fontWeight = 'normal';
+      document.getElementById('tabMerge').style.fontWeight = 'normal';
+      document.getElementById('tabExtract').style.fontWeight = 'normal';
+      document.getElementById('tabMatch').style.fontWeight = 'normal';
+      document.getElementById('tabTransclusion').style.fontWeight = 'normal';
+      document.getElementById('tabDuplicates').style.fontWeight = 'normal';
+
+      // Показываем нужное
+      if (tab === 'clear') {
+        document.getElementById('tabContentClear').style.display = '';
+        document.getElementById('tabClear').style.fontWeight = 'bold';
+      } else if (tab === 'merge') {
+        document.getElementById('tabContentMerge').style.display = '';
+        document.getElementById('tabMerge').style.fontWeight = 'bold';
+      } else if (tab === 'extract') {
+        document.getElementById('tabContentExtract').style.display = '';
+        document.getElementById('tabExtract').style.fontWeight = 'bold';
+      } else if (tab === 'match') {
+        document.getElementById('tabContentMatch').style.display = '';
+        document.getElementById('tabMatch').style.fontWeight = 'bold';
+      } else if (tab === 'transclusion') {
+        document.getElementById('tabContentTransclusion').style.display = '';
+        document.getElementById('tabTransclusion').style.fontWeight = 'bold';
+      } else if (tab === 'duplicates') {
+        document.getElementById('tabContentDuplicates').style.display = '';
+        document.getElementById('tabDuplicates').style.fontWeight = 'bold';
+      }
+    }
+
+    // --- СКРИПТЫ ДЛЯ ВКЛАДКИ "ОЧИСТКА СТРОК" ---
+    function processText() {
+      const inputText = document.getElementById('input').value;
+      let cleanedText = inputText.replace(/^[\[][^[\]]+[\]]:\s*/gm, '');
+      const blocks = [];
+      let currentBlock = [];
+      const nameLineRegex = /^((\d+):\s*)?[∾∿]*\\?n?<∾∾C\[6\]|【/;
+      for (const line of cleanedText.split('\n')) {
+        if (line.trim() === '') continue;
+        if (nameLineRegex.test(line) && currentBlock.length > 0) {
+          blocks.push(currentBlock.join('\n'));
+          currentBlock = [line];
+        } else {
+          currentBlock.push(line);
+        }
+      }
+      if (currentBlock.length > 0) {
+        blocks.push(currentBlock.join('\n'));
+      }
+      const uniqueBlocks = [];
+      for (let i = 0; i < blocks.length; i++) {
+        if (i === 0 || blocks[i] !== blocks[i - 1]) {
+          uniqueBlocks.push(blocks[i]);
+        }
+      }
+      const result = [];
+      for (const blockText of uniqueBlocks) {
+        const blockLines = blockText.split('\n');
+        for (const line of blockLines) {
+          const nameMatch = line.match(/^((\d+):\s*)?[∾∿]*\\?n?<∾∾C\[6\](.+?)∾∾C\[0\]>(.*)$/);
+          if (nameMatch) {
+            const numPrefix = nameMatch[2] ? `${nameMatch[2]}: ` : '';
+            const name = nameMatch[3].replace(/[∾∿]/g, '').trim();
+            const dialogue = nameMatch[4].replace(/[∾∿]/g, '').trim();
+            result.push(numPrefix + name);
+            if (dialogue) {
+              result.push(dialogue);
+            }
+          } else {
+            result.push(line);
+          }
+        }
+      }
+      document.getElementById('output').innerText = result.join('\n').replace(/\n\n+/g, '\n\n');
+    }
+
+    function copyOutput() {
+      navigator.clipboard.writeText(document.getElementById('output').innerText).then(() => {
+        alert("Результат скопирован в буфер обмена!");
+      });
+    }
+
+    // --- СКРИПТЫ ДЛЯ ВКЛАДКИ "ОБЪЕДИНЕНИЕ ИМЁН" ---
+    function processMerge() {
+      const inputText = document.getElementById('inputMerge').value;
+      const lines = inputText.split('\n');
+      const result = [];
+      let i = 0;
+      while (i < lines.length) {
+        if (lines[i].trim() === '') {
+          result.push('');
+          i++;
+          continue;
+        }
+        const nameMatch = lines[i].match(/^(\s*)ShowText\(\["【(.+?)】(?:（好感度：(.+?)）)?"\]\)/);
+        const textMatch = (i + 1 < lines.length) ? lines[i + 1].match(/^(\s*)ShowText\(\["([\s\S]*?)"\]\)/) : null;
+        if (nameMatch && textMatch) {
+          const indent = nameMatch[1] || '';
+          let name = nameMatch[2].replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          let affection = nameMatch[3] ? nameMatch[3].trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"') : '';
+          let text = textMatch[2].replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          const affectionPart = affection ? ` \\C[8](Привязанность:${affection})` : '';
+          let merged = `${indent}ShowText(["\\n<\\C[6]${name}${affectionPart}\\C[0]>${text}"])`;
+          const formatCheck = merged.match(/^([ \t]*)ShowText\(\["(.*)"\]\s*\)/);
+          if (formatCheck) {
+            const currentIndent = formatCheck[1] || '';
+            const content = formatCheck[2] || '';
+            const escapedContent = escapeFirstThree(content);
+            merged = `${currentIndent}ShowText(["${escapedContent}"])`;
+          }
+          result.push(merged);
+          i += 2;
+        } else {
+          result.push(lines[i]);
+          i++;
+        }
+      }
+      document.getElementById('outputMerge').innerText = result.join('\n');
+    }
+
+    function copyMergeOutput() {
+      navigator.clipboard.writeText(document.getElementById('outputMerge').innerText).then(() => {
+        alert("Результат скопирован в буфер обмена!");
+      });
+    }
+
+    function escapeFirstThree(str) {
+      let count = 0;
+      return str.replace(/\\n|<\\?C\[6\]|\\?C\[0\]>/g, function (match) {
+        count++;
+        if (count === 1 && match === '\\n') return '\\\\n';
+        if (count === 2 && (match === '<\\C[6]' || match === '<C[6]')) return '<\\\\C[6]';
+        if (count === 3 && (match === '\\C[0]>' || match === 'C[0]>')) return '\\\\C[0]>';
+        return match;
+      });
+    }
+
+    // --- СКРИПТЫ ДЛЯ ВКЛАДКИ "ИЗВЛЕЧЕНИЕ СЦЕНАРИЯ" ---
+    function processFiles() {
+      const files = document.getElementById('fileInput').files;
+      const output = document.getElementById('outputExtract');
+      
+      const isTextOnly = document.getElementById('textOnlyExtract').checked;
+      const isJapOnly = document.getElementById('japOnlyExtract').checked;
+      
+      output.value = '';
+
+      if (!files.length) {
+        alert('Пожалуйста, выберите файлы!');
+        return;
+      }
+      const promises = Array.from(files).map(file => {
+        return file.text().then(text => extractMapText(text, file.name, isTextOnly, isJapOnly));
+      });
+      Promise.all(promises).then(results => {
+        output.value = results.filter(res => res.trim() !== '').join('\n\n\n');
+      });
+    }
+
+    function extractMapText(text, fileName, isTextOnly = false, isJapOnly = false) {
+      let fileLines = [];
+
+      const hasJapanese = (str) => {
+        // 1. Обычные японские символы (хирагана, катакана, кандзи)
+        if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(str)) return true;
+
+        // 2. Проверяем строки, в которых НЕТ русских букв (чтобы не зацепить переведенные фразы)
+        if (!/[А-Яа-яЁё]/.test(str)) {
+          // Если есть полноширинные японские знаки (!, ?, скобки и т.д.)
+          if (/[\uFF01-\uFF65\u3000-\u303F]/.test(str)) return true;
+
+          // Если строка состоит ТОЛЬКО из знаков препинания (многоточия, восклицательные знаки, тильды)
+          const pureSymbols = str.replace(/[\s\.…!?'"♪~〜\-—_]/g, '');
+          if (pureSymbols === '' && str.trim() !== '') return true;
+        }
+
+        return false;
+      };
+
+      const nameMatch = text.match(/Display Name\s*=\s*"(.+?)"/);
+      const header = nameMatch ? `--- ${fileName} (${nameMatch[1]}) ---` : `--- ${fileName} ---`;
+
+      // 1. Предварительная проверка склеенного текста (для старых форматов)
+      const regex = /【(.+?)】\s*\n([\s\S]*?)(?=\n【|$)/g;
+      let match;
+      let hasFoundMatches = false;
+      
+      while ((match = regex.exec(text)) !== null) {
+        hasFoundMatches = true;
+        const name = match[1].trim();
+        const body = match[2].trim().split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+        
+        if (!isJapOnly || hasJapanese(body)) {
+          if (name) fileLines.push(`【${name}】`);
+          if (body) fileLines.push(body);
+        }
+      }
+
+      // 2. Основная обработка технического текста
+      if (!hasFoundMatches) {
+        const allMatches = [];
+
+        const textMatches = [...text.matchAll(/(?:ShowText|Script|ScriptMore)\(\s*\[\s*"(.+?)"\s*]\s*\)/g)];
+        textMatches.forEach(m => allMatches.push({ index: m.index, type: 'text', match: m }));
+
+        const choiceMatches = [...text.matchAll(/ShowChoices\(\s*\[\s*\[\s*(.*?)\s*\]/g)];
+        choiceMatches.forEach(m => allMatches.push({ index: m.index, type: 'choice', match: m }));
+
+        const whenMatches = [...text.matchAll(/When\(\s*\[\s*\d+\s*,\s*"(.*?)"\s*\]/g)];
+        whenMatches.forEach(m => allMatches.push({ index: m.index, type: 'when', match: m }));
+
+        const itemMatches = [...text.matchAll(/ChangeItems\(\s*(\[.*?\])\s*\)/g)];
+        itemMatches.forEach(m => allMatches.push({ index: m.index, type: 'changeItems', match: m }));
+
+        const weaponMatches = [...text.matchAll(/ChangeWeapons\(\s*(\[.*?\])\s*\)/g)];
+        weaponMatches.forEach(m => allMatches.push({ index: m.index, type: 'changeWeapons', match: m }));
+
+        const armorMatches = [...text.matchAll(/ChangeArmors\(\s*(\[.*?\])\s*\)/g)];
+        armorMatches.forEach(m => allMatches.push({ index: m.index, type: 'changeArmors', match: m }));
+
+        const attrMatches = [...text.matchAll(/ShowTextAttributes\(\s*(\[\s*""\s*,[\s\S]*?\])\s*\)/g)];
+        attrMatches.forEach(m => allMatches.push({ index: m.index, type: 'attributes', match: m }));
+
+        allMatches.sort((a, b) => a.index - b.index);
+
+        // --- УМНАЯ ЛОГИКА ГРУППИРОВКИ ПО РЕПЛИКАМ ---
+        let pendingName = null;
+        let pendingDialogue = [];
+        let pendingHasJap = false;
+
+        // Функция сброса: сохраняет диалог, если он прошел проверки
+        const flushPending = () => {
+          if (pendingDialogue.length > 0) {
+            // Если JAP Only выключен или в реплике есть японский
+            if (!isJapOnly || pendingHasJap) {
+              if (pendingName) fileLines.push(`【${pendingName}】`);
+              fileLines.push(...pendingDialogue);
+            }
+          } else if (pendingName && !isJapOnly) {
+            // Случай, если встретилось только имя без текста
+            fileLines.push(`【${pendingName}】`);
+          }
+          // Очищаем буфер для следующего говорящего
+          pendingName = null;
+          pendingDialogue = [];
+          pendingHasJap = false;
+        };
+
+        allMatches.forEach(item => {
+          if (item.type === 'text') {
+            const raw = item.match[1];
+            const unescaped = raw.replace(/\\\\/g, '\\');
+
+            const tagMatch = unescaped.match(/^(?:\\n)?<\\C\[6\](.+?)\\C\[0\]>([\s\S]*)$/i);
+            const customTagMatch = unescaped.match(/^(?:\\n)?<\\?(.+?)\\?>([\s\S]*)$/);
+            const standaloneNameMatch = unescaped.match(/^【(.+?)】$/);
+
+            if (tagMatch || customTagMatch) {
+              flushPending(); // Выводим предыдущего оратора
+              
+              const m = tagMatch || customTagMatch;
+              let name = m[1].trim();
+              if (isTextOnly) {
+                name = name.replace(/\s*\\[A-Za-z]+\[\d+\].*$/, '').replace(/\s*\(.*?\)/g, '').trim();
+              }
+              const body = m[2].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+              
+              pendingName = name;
+              if (body) {
+                pendingDialogue.push(body);
+                if (hasJapanese(body)) pendingHasJap = true;
+              }
+            } else if (standaloneNameMatch) {
+              flushPending(); // Выводим предыдущего оратора
+              let name = standaloneNameMatch[1].trim();
+              if (isTextOnly) {
+                name = name.replace(/\s*\\[A-Za-z]+\[\d+\].*$/, '').replace(/\s*\(.*?\)/g, '').trim();
+              }
+              pendingName = name;
+            } else {
+              const cleaned = unescaped.replace(/\\[A-Za-z]\[\d*]/g, '').replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+              if (cleaned && cleaned !== '\\') {
+                let excludedCommands = ['add_actor_ex', 'level_adjust', 'set_class_level', 'gain_medal', 'call_synthesize'];
+                if (isTextOnly) {
+                  excludedCommands = excludedCommands.concat(['actor_label', 'actor_label_jump', 'call_novel_scene', 'se_play', 'bgm_play', 'bgs_play', 'fade_out', 'fade_in', 'wait', 'stop_bgm', 'present_start', 'move_actor_ex']);
+                }
+                let isExcluded = excludedCommands.some(cmd => cleaned.startsWith(cmd));
+                if (isTextOnly && !isExcluded) {
+                  if (/^[A-Za-z0-9_]+$/.test(cleaned) || /^(?:好感度|Привязанность)\s*\d+\s*:/.test(cleaned)) isExcluded = true;
+                }
+                
+                if (!isExcluded) {
+                  // Обычный текст добавляем в реплику текущего оратора
+                  pendingDialogue.push(cleaned);
+                  if (hasJapanese(cleaned)) pendingHasJap = true;
+                } else {
+                  flushPending(); // Техническая команда прерывает реплику
+                }
+              }
+            }
+          } else {
+            flushPending(); // Любая другая команда (выбор, предметы) прерывает реплику
+            
+            if (item.type === 'choice' || item.type === 'when') {
+              const content = item.type === 'choice' ? item.match[1] : item.match[1];
+              if (item.type === 'choice') {
+                const strings = [...content.matchAll(/"(.*?)"/g)];
+                strings.forEach(s => {
+                  const cleaned = s[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+                  if (!isJapOnly || hasJapanese(cleaned)) fileLines.push(cleaned);
+                });
+              } else {
+                const cleaned = content.replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+                if (!isJapOnly || hasJapanese(cleaned)) fileLines.push(cleaned);
+              }
+            } else if (!isTextOnly) {
+              if (item.type === 'attributes') fileLines.push(`ShowTextAttributes(${item.match[1]})`);
+              else if (item.type === 'changeItems') fileLines.push(`ChangeItems(${item.match[1]})`);
+              else if (item.type === 'changeWeapons') fileLines.push(`ChangeWeapons(${item.match[1]})`);
+              else if (item.type === 'changeArmors') fileLines.push(`ChangeArmors(${item.match[1]})`);
+            }
+          }
+        });
+        
+        flushPending(); // Не забываем вывести последнюю фразу в конце файла
+      }
+      
+      if (fileLines.length > 0) {
+        return [header, ...fileLines].join('\n').replace(/\n\n+/g, '\n\n').trim();
+      }
+      return "";
+    }
+
+    function copyExtractOutput() {
+      const textarea = document.getElementById('outputExtract');
+      textarea.select();
+      try {
+        navigator.clipboard.writeText(textarea.value).then(() => {
+          alert('Текст скопирован!');
+        });
+      } catch (err) {
+        document.execCommand('copy');
+      }
+    }
+
+    // --- СКРИПТЫ ДЛЯ ВКЛАДКИ "СОПОСТАВЛЕНИЕ ДАННЫХ" ---
+    // --- ОБНОВЛЕННАЯ ФУНКЦИЯ ДЛЯ ВКЛАДКИ "СОПОСТАВЛЕНИЕ ДАННЫХ" ---
+    // --- НОВАЯ ФУНКЦИЯ "УМНОЙ" БЛОЧНОЙ ЗАМЕНЫ ---
+    function processMatch() {
+      const sourceText = document.getElementById('inputSource').value;
+      const targetText = document.getElementById('inputTarget').value;
+      const fieldsInput = document.getElementById('fieldsToReplace').value;
+
+      // Получаем список полей. Пример: ["ShowText", "ShowTextAttributes", "Note"]
+      const fieldsToReplace = fieldsInput.split(',').map(f => f.trim()).filter(f => f);
+
+      if (fieldsToReplace.length === 0) {
+        alert("Укажите поля для замены!");
+        return;
+      }
+
+      // Вспомогательная функция для проверки "пустоты" значения
+      const isNotEmpty = (line) => {
+        const trimmed = line.trim();
+        // Case: Key = Value
+        const kvMatch = trimmed.match(/^[^=]+?=\s*(.*)$/);
+        if (kvMatch) {
+          const val = kvMatch[1].trim();
+          return val !== '""' && val !== "''" && val !== "";
+        }
+        // Case: Command([...]) - ищем непустую строку в кавычках
+        const quoteMatch = trimmed.match(/"([^"]+)"|'([^']+)'/);
+        return !!quoteMatch;
+      };
+
+      // Вспомогательная функция: проверяет, является ли строка "заменяемой" (командой или параметром)
+      const isTargetField = (line) => {
+        const trimmed = line.trim();
+        for (const field of fieldsToReplace) {
+          // Проверка для параметров: [Field][номер] = [Значение]
+          // Это позволит указывать просто "Message", чтобы поймать "Message 1", "Message 2" и т.д.
+          const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // экранируем спецсимволы поля
+          const propWithNumberRegex = new RegExp(`^${escapedField}(\\s*\\d+)?\\s*=`);
+          if (propWithNumberRegex.test(trimmed)) return true;
+
+          // Проверка для команд: Field(...)
+          if (trimmed.startsWith(field)) return true;
+        }
+        return false;
+      };
+
+      // Регулярное выражение для поиска заголовков данных (например: "Armor 7408", "Skill 1")
+      // Исключаем строки, содержащие "=", так как это могут быть поля (например: "Message 1 =")
+      const headerRegex = /^([A-Za-z_]+\s+\d+)(?![^=]*=)/;
+
+      // --- 1. АНАЛИЗ ИСТОЧНИКА (SOURCE) ---
+      const sourceGroups = {}; // Группы блоков, разбитые по заголовкам
+      let currentHeader = "GLOBAL"; // Для блоков до первого заголовка
+      let currentBlock = [];
+
+      const sourceLines = sourceText.split('\n');
+
+      for (const line of sourceLines) {
+        // Следим за заголовками для синхронизации
+        const headerMatch = line.match(headerRegex);
+        if (headerMatch) {
+          // Если мы переходим к новому заголовку, сохраняем накопленный блок
+          if (currentBlock.length > 0) {
+            if (!sourceGroups[currentHeader]) sourceGroups[currentHeader] = [];
+            sourceGroups[currentHeader].push(currentBlock);
+            currentBlock = [];
+          }
+          currentHeader = headerMatch[1].trim();
+          continue; // Сам заголовок игнорируем как поле для замены
+        }
+
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (isTargetField(line)) {
+          // Сохраняем строку без начальных отступов
+          currentBlock.push(trimmed);
+        } else {
+          // Это строка-разделитель
+          if (currentBlock.length > 0) {
+            if (!sourceGroups[currentHeader]) sourceGroups[currentHeader] = [];
+            sourceGroups[currentHeader].push(currentBlock);
+            currentBlock = [];
+          }
+        }
+      }
+      // Оставшийся в конце файла блок
+      if (currentBlock.length > 0) {
+        if (!sourceGroups[currentHeader]) sourceGroups[currentHeader] = [];
+        sourceGroups[currentHeader].push(currentBlock);
+      }
+
+      // --- РЕЖИМ ИЗВЛЕЧЕНИЯ: если Целевой текст пустой, просто вывести найденные строки из Источника ---
+      if (!targetText.trim()) {
+        const extractedLines = [];
+        const sourceLines2 = sourceText.split('\n');
+        let lastHeader = '';
+
+        for (const line of sourceLines2) {
+          const headerMatch = line.match(headerRegex);
+          if (headerMatch) {
+            lastHeader = line;
+            continue; // Заголовок добавим только если нашли нужные поля
+          }
+          if (isTargetField(line)) {
+            // Если это первая найденная строка после заголовка — добавим сам заголовок
+            if (lastHeader) {
+              // Добавляем пустую строку-отступ перед заголовком (кроме самого начала)
+              if (extractedLines.length > 0) extractedLines.push('');
+              extractedLines.push(lastHeader);
+              lastHeader = ''; // Сбрасываем, чтобы не повторять
+            }
+            extractedLines.push(line.trimEnd());
+          }
+        }
+
+        document.getElementById('outputMatch').innerText = finalizeResult(extractedLines);
+        return;
+      }
+
+      function finalizeResult(lines) {
+        const removeEmpty = document.getElementById('removeEmptyBlocks').checked;
+        if (!removeEmpty) return lines.join('\n');
+
+        const cleaned = [];
+        let currentBlock = [];
+        let hasContent = false;
+
+        const pushBlock = () => {
+          if (currentBlock.length > 0) {
+            if (hasContent) {
+              cleaned.push(...currentBlock);
+            }
+            currentBlock = [];
+            hasContent = false;
+          }
+        };
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          const headerMatch = line.match(headerRegex);
+
+          if (headerMatch) {
+            pushBlock();
+            currentBlock.push(line);
+            continue;
+          }
+
+          if (trimmed === "") {
+            pushBlock();
+            // Добавляем пустую строку только если она реально разделяет что-то
+            if (cleaned.length > 0 && cleaned[cleaned.length - 1] !== "") {
+              cleaned.push("");
+            }
+            continue;
+          }
+
+          if (isTargetField(line) && isNotEmpty(line)) {
+            hasContent = true;
+          }
+          currentBlock.push(line);
+        }
+        pushBlock();
+
+        return cleaned.join('\n').replace(/\n\n+/g, '\n\n').trim();
+      }
+
+      // --- 2. ОБРАБОТКА ЦЕЛЕВОГО ТЕКСТА (TARGET) ---
+      const targetLines = targetText.split('\n');
+      const resultLines = [];
+
+      const groupIndexes = {}; // Отслеживает использованные блоки по каждому заголовку
+      currentHeader = "GLOBAL";
+      let isSkippingTargetBlock = false; 
+
+      for (const line of targetLines) {
+        const indentMatch = line.match(/^(\s*)/);
+        const indent = indentMatch ? indentMatch[1] : '';
+        const trimmed = line.trim();
+
+        // Проверяем смену заголовка в Target
+        const headerMatch = line.match(headerRegex);
+        if (headerMatch) {
+          currentHeader = headerMatch[1].trim();
+          isSkippingTargetBlock = false; // Сброс режима пропуска для нового заголовка
+          resultLines.push(line);
+          continue;
+        }
+
+        // Пустые строки всегда считаются разделителем блоков
+        if (!trimmed) {
+          isSkippingTargetBlock = false;
+          resultLines.push(line);
+          continue;
+        }
+
+        if (isTargetField(line)) {
+          // ЭТО НАЧАЛО ИЛИ ПРОДОЛЖЕНИЕ БЛОКА В ЦЕЛЕВОМ ФАЙЛЕ
+          if (!isSkippingTargetBlock) {
+            if (!groupIndexes[currentHeader]) groupIndexes[currentHeader] = 0;
+
+            if (sourceGroups[currentHeader] && groupIndexes[currentHeader] < sourceGroups[currentHeader].length) {
+              // Вставляем ВЕСЬ блок из источника сразу
+              const newBlock = sourceGroups[currentHeader][groupIndexes[currentHeader]];
+              for (const newLineContent of newBlock) {
+                resultLines.push(indent + newLineContent);
+              }
+              groupIndexes[currentHeader]++;
+              // Включаем режим пропуска, чтобы проигнорировать оригинальные (удаляемые) строки
+              isSkippingTargetBlock = true;
+            } else {
+              // Если в Source нет перевода для этого блока (или весь блок удалили)
+              // Мы оставляем оригинальную строку Target
+              resultLines.push(line);
+              // Важно: НЕ включаем isSkippingTargetBlock
+            }
+          }
+        } else {
+          // Это строка-разделитель — она сбрасывает режим пропуска блока
+          isSkippingTargetBlock = false;
+          resultLines.push(line);
+        }
+      }
+
+      document.getElementById('outputMatch').innerText = finalizeResult(resultLines);
+    }
+
+    function copyMatchOutput() {
+      navigator.clipboard.writeText(document.getElementById('outputMatch').innerText).then(() => {
+        alert("Результат скопирован в буфер обмена!");
+      });
+    }
+
+    // --- СКРИПТЫ ДЛЯ ВКЛАДКИ "ТРАНСКЛЮЗИЯ ДАННЫХ" ---
+
+    function processTransclusion() {
+      const rulesText  = document.getElementById('transRules').value.trim();
+      const targetText = document.getElementById('transTarget').value;
+      const sourceText = document.getElementById('transSource').value;
+
+      if (!rulesText || !targetText || !sourceText) {
+        alert('Заполните все три поля: правила, целевой файл и файл-источник.');
+        return;
+      }
+
+      // --- 1. Парсинг правил ---
+      // Разбиваем на секции "Позиция" и "Данные"
+      const sections = {};
+      let currentSection = null;
+      for (const line of rulesText.split('\n')) {
+        const t = line.trim();
+        if (!t) continue;
+        if (t === 'Позиция') { currentSection = 'position'; sections.position = []; continue; }
+        if (t === 'Данные')  { currentSection = 'data';     sections.data     = []; continue; }
+        if (currentSection) sections[currentSection].push(t);
+      }
+
+      if (!sections.position || sections.position.length === 0) {
+        alert('Укажите раздел "Позиция" в правилах.');
+        return;
+      }
+      if (!sections.data || sections.data.length === 0) {
+        alert('Укажите раздел "Данные" в правилах.');
+        return;
+      }
+
+      // Поддерживаем два формата:
+      // 1. <Тег ID> = SourceType ID (связь через тег в Note)
+      // 2. TargetType = SourceType (связь напрямую по ID заголовков)
+      let tagName    = null;
+      let sourceType = null;
+      let targetType = null;
+
+      let posLine  = sections.position[0];
+      let posMatch = posLine.match(/^<(.+?)\s+ID>\s*=\s*(\S+)\s+ID$/);
+
+      if (posMatch) {
+        tagName    = posMatch[1];
+        sourceType = posMatch[2];
+      } else {
+        posMatch = posLine.match(/^(\S+)\s*=\s*(\S+)$/);
+        if (posMatch) {
+          targetType = posMatch[1];
+          sourceType = posMatch[2];
+        }
+      }
+
+      if (!posMatch) {
+        alert(`Неверный формат раздела "Позиция".\nОжидаемые варианты:\n1. <Тег ID> = ТипБлока ID\n2. ТипБлокаЦель = ТипБлокаИсточник\n\nПолучено: ${posLine}`);
+        return;
+      }
+
+      // Правила для полей: [{targetField, sourceField}, ...]
+      const fieldRules = [];
+      for (const rule of sections.data) {
+        const m = rule.match(/^(.+?)\s*=\s*(.+)$/);
+        if (m) fieldRules.push({ targetField: m[1].trim(), sourceField: m[2].trim() });
+      }
+
+      // --- 2. Индексирование файла-источника ---
+      // Собираем словарь: ID → { поле → строка_целиком }
+      const headerRegexSource = new RegExp(`^${sourceType.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s+(\\d+)\\b`);
+      const sourceIndex = {}; // { '54': { 'Nickname': 'Nickname = "Кролик-Слайм"', ... }, ... }
+
+      let srcBlock = null;
+      let srcId    = null;
+
+      for (const line of sourceText.split('\n')) {
+        const hm = line.match(headerRegexSource);
+        if (hm) {
+          if (srcBlock && srcId) sourceIndex[srcId] = srcBlock;
+          srcId    = hm[1];
+          srcBlock = {};
+          continue;
+        }
+        if (srcBlock !== null) {
+          // Пытаемся распознать поле: FieldName <optNum> = "..."  или  FieldName = ...
+          const fm = line.match(/^\s*([A-Za-z\u0400-\u04FF][A-Za-z\u0400-\u04FF\d\s]*?)\s*=\s*/);
+          if (fm) {
+            const fieldKey = fm[1].trim().replace(/\s+\d+$/, ''); // убираем цифру в конце (Message 1 → Message)
+            // Сохраняем по «чистому» имени поля чтобы было легко искать
+            if (!srcBlock[fieldKey]) srcBlock[fieldKey] = {};
+            srcBlock[fm[1].trim()] = line.trimEnd(); // точный ключ с номером
+            srcBlock[fieldKey]     = line.trimEnd(); // ключ без номера как запасной
+          }
+        }
+      }
+      if (srcBlock && srcId) sourceIndex[srcId] = srcBlock;
+
+      // --- 3. Обработка целевого файла ---
+      const blockHeaderRegex = /^([A-Za-z_\u0400-\u04FF]+\s+\d+)(?![^=\n]*=)/;
+      const targetLines = targetText.split('\n');
+      const resultLines = [];
+
+      let tgtBlock     = [];  // накопитель строк текущего блока
+      let tgtHasHeader = false;
+
+      const flushBlock = (block) => {
+        let linkedId = null;
+
+        if (tagName) {
+          // Ищем тег внутри полей блока (например, в Note)
+          const escapedTag = tagName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const tagRegex   = new RegExp(`<${escapedTag}\\s+(\\d+)>`);
+          for (const l of block) {
+            const tm = l.match(tagRegex);
+            if (tm) { linkedId = tm[1]; break; }
+          }
+        } else if (targetType) {
+          // Прямое сопоставление по заголовку блока
+          const header = block[0]; 
+          const escapedTarget = targetType.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+          const headerMatch = header.match(new RegExp(`^${escapedTarget}\\s+(\\d+)`));
+          if (headerMatch) {
+            linkedId = headerMatch[1];
+          }
+        }
+
+        if (linkedId && sourceIndex[linkedId]) {
+          const srcData = sourceIndex[linkedId];
+          return block.map(l => {
+            // Проверяем, является ли строка заменяемым полем
+            const fm = l.match(/^(\s*)([A-Za-z\u0400-\u04FF][A-Za-z\u0400-\u04FF\d\s]*?)\s*=/);
+            if (!fm) return l;
+            const indent     = fm[1];
+            const fieldLabel = fm[2].trim(); // напр. "Name"
+            const baseLabel  = fieldLabel.replace(/\s+\d+$/, '');
+
+            for (const rule of fieldRules) {
+              if (rule.targetField === fieldLabel || rule.targetField === baseLabel) {
+                // Ищем значение из источника
+                const srcLine = srcData[rule.sourceField] || srcData[rule.sourceField.replace(/\s+\d+$/,'')];
+                if (srcLine === undefined) return l;
+
+                // Берем только часть после "=" чтобы сохранить имя поля целевого файла
+                const eqIdx = srcLine.indexOf('=');
+                if (eqIdx === -1) return l;
+                const valueStr = srcLine.slice(eqIdx + 1).trimStart();
+
+                // Пересобираем строку: оригинальный indent + оригинальное имя поля + = + новое значение
+                const origEq = l.indexOf('=');
+                const origPrefix = l.slice(0, origEq + 1); // "  Name ="
+                return origPrefix + ' ' + valueStr;
+              }
+            }
+            return l;
+          });
+        }
+
+        return block; // без изменений если нет связи
+      };
+
+      let pendingBlock = [];
+
+      for (const line of targetLines) {
+        const hm = line.match(blockHeaderRegex);
+        if (hm) {
+          // Сохраняем предыдущий блок
+          if (pendingBlock.length > 0) {
+            resultLines.push(...flushBlock(pendingBlock));
+          }
+          pendingBlock = [line];
+        } else {
+          if (pendingBlock.length > 0) {
+            pendingBlock.push(line);
+          } else {
+            // Строки до первого заголовка — сохранить как есть
+            resultLines.push(line);
+          }
+        }
+      }
+      // Последний блок
+      if (pendingBlock.length > 0) {
+        resultLines.push(...flushBlock(pendingBlock));
+      }
+
+      document.getElementById('outputTransclusion').innerText = resultLines.join('\n');
+    }
+
+    function copyTransclusionOutput() {
+      const text = document.getElementById('outputTransclusion').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Результат скопирован в буфер обмена!');
+      });
+    }
+
+    // === СОВЕРШЕННАЯ ЛОГИКА (ТОЛЬКО ДИАЛОГИ ПО ТЕГАМ ИМЕН) ===
+
+    function readMultipleFilesAsLines(fileInputId) {
+      const files = document.getElementById(fileInputId).files;
+      if (!files.length) return Promise.resolve([]);
+      
+      const promises = Array.from(files).map(file => {
+        return file.text().then(text => ({ name: file.name, lines: text.split('\n') }));
+      });
+      return Promise.all(promises);
+    }
+
+function getBlocks(lines) {
+       const blocks = {};
+       let baseContext = "Global";
+       let currentLabel = ""; // Добавляем отслеживание Label
+       let currentAttr = ""; // Отслеживание ShowTextAttributes (каждый вызов = новый экран)
+
+       for (let i = 0; i < lines.length; i++) {
+         const line = lines[i];
+
+         // Отслеживаем глобальные события
+         const evMatch = line.match(/^(?:CommonEvent|Event|MapEvent)\s+\d+/i);
+         if (evMatch) {
+           baseContext = evMatch[0].trim();
+           currentLabel = ""; // Сбрасываем Label при новом ивенте
+           currentAttr = "";
+           continue;
+         }
+
+         // Отслеживаем страницы
+         const pageMatch = line.match(/^\s*Page\s+(\d+)/i);
+         if (pageMatch) {
+           baseContext = baseContext.split('_')[0] + "_Page " + pageMatch[1];
+           currentLabel = ""; // Сбрасываем Label при новой странице
+           currentAttr = "";
+           continue;
+         }
+
+         // НОВОВВЕДЕНИЕ: Ловим Label (например, Label(["906"]) или Label([878]))
+         const labelMatch = line.match(/^\s*Label\(\s*\[\s*"?([^"\]]+)"?\s*\]\s*\)/);
+         if (labelMatch) {
+           currentLabel = "_Label " + labelMatch[1]; // Добавляем Label к пути
+           currentAttr = "";
+           continue;
+         }
+
+         // Ловим ShowTextAttributes (гарантирует разделение на отдельные экраны диалога)
+         const attrMatch = line.match(/^\s*ShowTextAttributes\(/);
+         if (attrMatch) {
+           currentAttr = "_Attr " + i;
+           continue;
+         }
+
+         // Сохраняем текст в блок с учетом текущего Label и Attr
+         const stMatch = line.match(/^\s*ShowText\(\["([\s\S]*?)"\]\)/);
+         if (stMatch) {
+           // Формируем полный путь, например: "CommonEvent 62_Page 0_Label 906_Attr 15"
+           const fullPath = baseContext + currentLabel + currentAttr;
+
+           if (!blocks[fullPath]) blocks[fullPath] = [];
+           blocks[fullPath].push({
+             text: stMatch[1],
+             fullLine: line,
+             lineNum: i + 1
+           });
+         }
+       }
+       return blocks;
+     }
+
+    function extractSyncDialogues(ruLines, jpLines, fileName) {
+      const ruBlocks = getBlocks(ruLines);
+      const jpBlocks = getBlocks(jpLines);
+      const results = [];
+
+      // --- НОВЫЕ ФУНКЦИИ: Глубокая очистка имени от тегов, скобок и переменных ---
+      function getPureJpName(raw) {
+          if (!raw) return null;
+          return raw.replace(/[【】]/g, '').trim(); // Убираем японские скобки
+      }
+
+      function getPureRuName(raw) {
+          if (!raw) return null;
+          let s = raw.replace(/\\\\?[a-zA-Z]\[\d+\]/gi, ''); // Удаляем цветовые коды и переменные (\C[6], \V[3894] и т.д.)
+          s = s.replace(/\(.*?\)/g, ''); // Удаляем любой текст в круглых скобках (например, Привязанность)
+          s = s.replace(/[<>]/g, ''); // Удаляем угловые скобки
+          return s.trim(); // Оставляем только чистое имя (например, "Варми")
+      }
+
+      for (const path in ruBlocks) {
+        const ruCmds = ruBlocks[path];
+        const jpCmds = jpBlocks[path] || [];
+
+        // 1. Собираем ВСЕ японские цепочки диалогов
+        const jpDialogues = [];
+        let currentJp = null;
+
+        for (let i = 0; i < jpCmds.length; i++) {
+          const jpText = jpCmds[i].text;
+          const nameMatch = jpText.match(/^【[^】]+】/);
+
+          if (nameMatch) {
+            const speakerName = nameMatch[0];
+            const pureName = getPureJpName(speakerName);
+            const textAfterName = jpText.substring(speakerName.length).trim();
+
+            // Склеиваем, ориентируясь только на ЧИСТОЕ имя
+            if (currentJp && currentJp.pureName === pureName && pureName !== "") {
+                currentJp.text += (currentJp.text ? " " : "") + textAfterName;
+            } else {
+                if (currentJp) jpDialogues.push(currentJp);
+                currentJp = { name: speakerName, pureName: pureName, text: textAfterName };
+            }
+          } else if (currentJp) {
+            currentJp.text += (currentJp.text ? " " : "") + jpText;
+          }
+        }
+        if (currentJp) jpDialogues.push(currentJp); 
+
+        // 2. Собираем ВСЕ русские цепочки диалогов
+        const ruDialogues = [];
+        let currentRu = null;
+
+        for (let i = 0; i < ruCmds.length; i++) {
+          const ruCmd = ruCmds[i];
+          const ruText = ruCmd.text;
+const isDialogueStart = ruText.includes('\\n<') || ruText.includes('<\\C[') || /^【[^】]+】/.test(ruText);
+
+           if (isDialogueStart) {
+             const tagMatch = ruText.match(/^(?:\\\\n\s*)?(<[^>]+>)/) || ruText.match(/^【([^】]+)】/);
+             const nameTag = tagMatch ? tagMatch[1] : null;
+             const pureName = getPureRuName(nameTag);
+
+             // Склеиваем экраны, ориентируясь только на ЧИСТОЕ имя
+             if (currentRu && currentRu.pureName === pureName && pureName !== null && pureName !== "") {
+                 let cleanText = ruText;
+                 cleanText = cleanText.replace(/^(?:\\\\n\s*)?<[^>]+>\s*/, ''); // Убираем повторный тег имени из текста
+                 cleanText = cleanText.replace(/^【[^】]+】\s*/, ''); // Чистим сырой JP-тег если есть
+                 cleanText = cleanText.replace(/#\+\s*/g, '').trim();
+
+                 currentRu.combinedText += (currentRu.combinedText ? " " : "") + cleanText;
+                 currentRu.fullLines.push(ruCmd.fullLine);
+             } else {
+                 if (currentRu) ruDialogues.push(currentRu);
+                 let cleanText = ruText.replace(/^【[^】]+】\s*/, ''); // Чистим сырой JP-тег если есть
+                 currentRu = {
+                     nameTag: nameTag,
+                     pureName: pureName, // Сохраняем чистое имя для будущих проверок
+                     combinedText: cleanText.replace(/#\+\s*/g, '').trim(),
+                     fullLines: [ruCmd.fullLine],
+                     lineNum: ruCmd.lineNum
+                 };
+             }
+          } else if (currentRu) {
+            currentRu.combinedText += " " + ruText.replace(/#\+\s*/g, '').trim();
+            currentRu.fullLines.push(ruCmd.fullLine);
+          }
+        }
+        if (currentRu) ruDialogues.push(currentRu); 
+
+        // 3. Пропускаем блоки с несовпадающим количеством реплик
+        // (В переводах RPG Maker это норма - разное разбиение строк)
+        if (jpDialogues.length !== ruDialogues.length && ruDialogues.length > 0) {
+            continue;
+        }
+
+        // 4. Сопоставляем готовые блоки
+        for (let i = 0; i < ruDialogues.length; i++) {
+            results.push({
+                fileName: fileName,
+                jpName: jpDialogues[i].name,
+                jpText: jpDialogues[i].text, 
+                ruCombinedText: ruDialogues[i].combinedText,
+                ruFullLines: ruDialogues[i].fullLines.join('\n'),
+                ruLineNum: ruDialogues[i].lineNum,
+                blockPath: path
+            });
+        }
+      }
+      return results;
+    }
+
+    function stripRuNameTag(text) {
+      let cleaned = text.replace(/^\\n\s*/, '').trim();
+      if (cleaned.startsWith('<') && cleaned.includes('\\C[')) {
+        cleaned = cleaned.replace(/^<.*?>\s*/, '');
+      }
+      return cleaned.trim();
+    }
+
+    function normalizeRuText(text) {
+      return text.replace(/\r/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function toggleDupMode() {
+      const mode = document.querySelector('input[name="dupMode"]:checked').value;
+      document.getElementById('dupCompareInputs').style.display = (mode === 'compare') ? 'flex' : 'none';
+      document.getElementById('dupAllFilesInputs').style.display = (mode === 'allfiles') ? '' : 'none';
+    }
+
+    function processDuplicates() {
+      const mode = document.querySelector('input[name="dupMode"]:checked').value;
+      if (mode === 'allfiles') {
+        processDuplicatesAllFiles();
+        return;
+      }
+
+      const output = document.getElementById('outputDuplicates');
+      output.value = 'Анализ файлов... Пожалуйста, подождите.';
+
+      Promise.all([
+        readMultipleFilesAsLines('dupJp1'),
+        readMultipleFilesAsLines('dupRu1'),
+        readMultipleFilesAsLines('dupJp2'),
+        readMultipleFilesAsLines('dupRu2')
+      ]).then(filesArrays => {
+        const [jp1Files, ru1Files, jp2Files, ru2Files] = filesArrays;
+
+        if (jp1Files.length === 0 || ru1Files.length === 0 || jp2Files.length === 0 || ru2Files.length === 0) {
+          alert('Пожалуйста, загрузите файлы во все 4 поля!');
+          output.value = '';
+          return;
+        }
+
+        const structureErrors = [];
+
+        // Вспомогательная функция: связывает JP и RU файлы по имени и извлекает диалоги
+        function getPairsFromFiles(jpList, ruList) {
+          let combinedPairs = [];
+          ruList.forEach(ruFile => {
+            // Ищем японский файл с точно таким же именем
+            const jpFile = jpList.find(f => f.name === ruFile.name);
+            if (!jpFile) {
+              structureErrors.push(`[ВНИМАНИЕ] Для файла ${ruFile.name} не загружен японский оригинал!`);
+              return;
+            }
+            const pairs = extractSyncDialogues(ruFile.lines, jpFile.lines, ruFile.name);
+            combinedPairs = combinedPairs.concat(pairs);
+          });
+          return combinedPairs;
+        }
+
+        // Собираем все диалоги из всех загруженных файлов
+        const map1Pairs = getPairsFromFiles(jp1Files, ru1Files);
+        const map2Pairs = getPairsFromFiles(jp2Files, ru2Files);
+
+        // Сохраняем исходники русских файлов в память для последующей перезаписи
+        globalRuFiles = {};
+        ru1Files.forEach(f => globalRuFiles[f.name] = f.lines.join('\n'));
+        ru2Files.forEach(f => globalRuFiles[f.name] = f.lines.join('\n'));
+
+        let diffData = []; 
+        globalConflicts = []; // Сбрасываем старые конфликты
+        const seenMismatches = new Set(); 
+
+        // Отлавливаем ошибки структуры (из всех загруженных файлов)
+        map1Pairs.concat(map2Pairs).forEach(pair => {
+            if (pair.jpName === "【ОШИБКА СТРУКТУРЫ】") {
+                structureErrors.push(`[${pair.fileName}] ${pair.jpText}`);
+            }
+        });
+
+        // Сравниваем каждый диалог из группы Источников с каждым диалогом из Целевой группы
+        map1Pairs.forEach(pair1 => {
+          if (pair1.jpName === "【ОШИБКА СТРУКТУРЫ】" || pair1.jpText.includes('[JP НЕ НАЙДЕН')) return;
+
+          const jpClean = pair1.jpText.replace(/[.!?…~♪\s。！？「」『』、]/g, '');
+          if (jpClean.length === 0) return;
+
+          const matchesInMap2 = map2Pairs.filter(pair2 => 
+             pair2.jpText === pair1.jpText && pair2.jpName === pair1.jpName
+          );
+
+          matchesInMap2.forEach(pair2 => {
+            const cleanRu1 = normalizeRuText(stripRuNameTag(pair1.ruCombinedText));
+            const cleanRu2 = normalizeRuText(stripRuNameTag(pair2.ruCombinedText));
+
+            if (cleanRu1 !== cleanRu2) {
+              const mismatchKey = `${pair1.fileName}|${pair2.fileName}|${pair1.jpName}|${pair1.jpText}|${cleanRu1}|${cleanRu2}|${pair1.ruLineNum}|${pair2.ruLineNum}`;
+              
+              if (!seenMismatches.has(mismatchKey)) {
+                seenMismatches.add(mismatchKey);
+                
+                // --- ДОБАВИТЬ ЭТОТ БЛОК ДЛЯ UI ---
+                globalConflicts.push({
+                  id: globalConflicts.length,
+                  jpContext: `【${pair1.jpName}】 ${pair1.jpText}`,
+                  file1Name: pair1.fileName,
+                  file1Text: pair1.ruFullLines,
+                  file1Line: pair1.ruLineNum,
+                  file2Name: pair2.fileName,
+                  file2Text: pair2.ruFullLines,
+                  file2Line: pair2.ruLineNum
+                });
+                // --- КОНЕЦ ДОБАВЛЕНИЯ ---
+
+                let entry = `[JP Оригинал]: ${pair1.jpName}${pair1.jpText}\n`;
+                entry += `*${pair1.fileName}* [${pair1.blockPath}]\n`;
+                entry += `Строка ${pair1.ruLineNum}\n`;
+                entry += `${pair1.ruFullLines}\n`;
+                entry += `*${pair2.fileName}* [${pair2.blockPath}]\n`;
+                entry += `Строка ${pair2.ruLineNum}\n`;
+                entry += `${pair2.ruFullLines}\n\n`;
+                entry += `----------------------------------------\n\n`;
+                
+                diffData.push({ 
+                  text: entry, 
+                  lineOrder: pair2.ruLineNum, 
+                  file1: pair1.fileName, 
+                  file2: pair2.fileName 
+                });
+              }
+            }
+          });
+        });
+
+        // Формируем финальный вывод
+        let finalOutput = "";
+        
+        if (structureErrors.length > 0) {
+            finalOutput += "⚠️ НАЙДЕНЫ ОШИБКИ ИЛИ РАССИНХРОНИЗАЦИИ:\n";
+            finalOutput += Array.from(new Set(structureErrors)).join("\n") + "\n\n========================================\n\n";
+        }
+
+        if (diffData.length === 0) {
+            finalOutput += 'Расхождений в одинаковых фразах не найдено!';
+        } else {
+          const sortByFile = document.getElementById('sortByFile').checked;
+          
+          if (sortByFile) {
+            // Сортировка по имени первого файла, затем второго, затем по строке
+            diffData.sort((a, b) => {
+              if (a.file1 < b.file1) return -1;
+              if (a.file1 > b.file1) return 1;
+              if (a.file2 < b.file2) return -1;
+              if (a.file2 > b.file2) return 1;
+              return a.lineOrder - b.lineOrder;
+            });
+          } else {
+            // Обычная сортировка শুধু по строке
+            diffData.sort((a, b) => a.lineOrder - b.lineOrder);
+          }
+          
+          finalOutput += `Найдено уникальных расхождений: ${diffData.length}\n\n` + diffData.map(d => d.text).join("");
+        }
+        
+        output.value = finalOutput;
+        
+        // Показываем кнопку "Исправить", если есть конфликты
+        document.getElementById('btnStartFix').style.display = globalConflicts.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('resolutionArea').style.display = 'none'; // Скрываем редактор при новом поиске
+      });
+    }
+
+    function copyDuplicatesOutput() {
+      const textarea = document.getElementById('outputDuplicates');
+      textarea.select();
+      try {
+        navigator.clipboard.writeText(textarea.value).then(() => {
+          alert('Результат скопирован!');
+        });
+      } catch (err) {
+        document.execCommand('copy');
+      }
+    }
+
+    function processDuplicatesAllFiles() {
+      const output = document.getElementById('outputDuplicates');
+      output.value = 'Анализ файлов... Пожалуйста, подождите.';
+
+      Promise.all([
+        readMultipleFilesAsLines('dupAllJp'),
+        readMultipleFilesAsLines('dupAllRu')
+      ]).then(filesArrays => {
+        const [jpFiles, ruFiles] = filesArrays;
+
+        if (jpFiles.length === 0 || ruFiles.length === 0) {
+          alert('Пожалуйста, загрузите файлы в оба поля!');
+          output.value = '';
+          return;
+        }
+
+        const structureErrors = [];
+        const index = {};
+
+        function getPairsFromFiles(jpList, ruList) {
+          let combinedPairs = [];
+          ruList.forEach(ruFile => {
+            const jpFile = jpList.find(f => f.name === ruFile.name);
+            if (!jpFile) {
+              structureErrors.push(`[ВНИМАНИЕ] Для файла ${ruFile.name} не загружен японский оригинал!`);
+              return;
+            }
+            const pairs = extractSyncDialogues(ruFile.lines, jpFile.lines, ruFile.name);
+            combinedPairs = combinedPairs.concat(pairs);
+          });
+          return combinedPairs;
+        }
+
+        const allPairs = getPairsFromFiles(jpFiles, ruFiles);
+        globalRuFiles = {};
+        ruFiles.forEach(f => globalRuFiles[f.name] = f.lines.join('\n'));
+
+        allPairs.forEach(pair => {
+          if (pair.jpName === "【ОШИБКА СТРУКТУРЫ】") {
+            structureErrors.push(`[${pair.fileName}] ${pair.jpText}`);
+          }
+        });
+
+        // Строим индекс по всем файлам
+        allPairs.forEach(pair => {
+          if (pair.jpName === "【ОШИБКА СТРУКТУРЫ】" || pair.jpText.includes('[JP НЕ НАЙДЕН')) return;
+          const jpClean = pair.jpText.replace(/[.!?…~♪\s。！？「」『』、]/g, '');
+          if (jpClean.length === 0) return;
+          const key = pair.jpName + "|" + pair.jpText;
+          if (!index[key]) {
+            index[key] = { jpName: pair.jpName, jpText: pair.jpText, occurrences: [] };
+          }
+          index[key].occurrences.push({
+            fileName: pair.fileName,
+            ruFullLines: pair.ruFullLines,
+            ruCombinedText: pair.ruCombinedText,
+            ruLineNum: pair.ruLineNum,
+            blockPath: pair.blockPath
+          });
+        });
+
+        let diffData = [];
+        globalConflicts = [];
+        const seenMismatches = new Set();
+
+        for (const key in index) {
+          const entry = index[key];
+          if (entry.occurrences.length < 2) continue;
+          const variantMap = {};
+          entry.occurrences.forEach(occ => {
+            const cleanRu = normalizeRuText(stripRuNameTag(occ.ruCombinedText));
+            if (!variantMap[cleanRu]) {
+              variantMap[cleanRu] = { text: cleanRu, fullLines: occ.ruFullLines, files: [], occurrences: [] };
+            }
+            variantMap[cleanRu].files.push(occ.fileName);
+            variantMap[cleanRu].occurrences.push(occ);
+          });
+
+          const uniqueVariants = Object.values(variantMap);
+          if (uniqueVariants.length < 2) continue;
+
+          const conflictId = globalConflicts.length;
+          const mismatchKey = key + "|" + uniqueVariants.map(v => v.text).join("||");
+          if (seenMismatches.has(mismatchKey)) continue;
+          seenMismatches.add(mismatchKey);
+
+          globalConflicts.push({
+            id: conflictId,
+            mode: 'allfiles',
+            jpContext: `【${entry.jpName}】 ${entry.jpText}`,
+            jpName: entry.jpName,
+            jpText: entry.jpText,
+            occurrences: entry.occurrences,
+            uniqueVariants: uniqueVariants
+          });
+
+          let entryText = `[JP Оригинал]: ${entry.jpName}${entry.jpText}\n`;
+          entryText += `Встречается в ${entry.occurrences.length} местах:\n`;
+          entry.occurrences.forEach(occ => {
+            entryText += `*${occ.fileName}* [${occ.blockPath}] Строка ${occ.ruLineNum}\n${occ.ruFullLines}\n`;
+          });
+          entryText += `Уникальных вариантов перевода: ${uniqueVariants.length}\n`;
+          uniqueVariants.forEach((v, idx) => {
+            entryText += `--- Вариант ${idx + 1} (${v.files.length} файлов) ---\n${v.text}\n`;
+          });
+          entryText += `----------------------------------------\n\n`;
+
+          diffData.push({
+            text: entryText,
+            lineOrder: entry.occurrences[0].ruLineNum,
+            file1: entry.occurrences[0].fileName
+          });
+        }
+
+        let finalOutput = "";
+        if (structureErrors.length > 0) {
+          finalOutput += "⚠️ НАЙДЕНЫ ОШИБКИ ИЛИ РАССИНХРОНИЗАЦИИ:\n";
+          finalOutput += Array.from(new Set(structureErrors)).join("\n") + "\n\n========================================\n\n";
+        }
+        if (diffData.length === 0) {
+          finalOutput += 'Расхождений в одинаковых фразах не найдено!';
+        } else {
+          const sortByFile = document.getElementById('sortByFile').checked;
+          if (sortByFile) {
+            diffData.sort((a, b) => {
+              if (a.file1 < b.file1) return -1;
+              if (a.file1 > b.file1) return 1;
+              return a.lineOrder - b.lineOrder;
+            });
+          } else {
+            diffData.sort((a, b) => a.lineOrder - b.lineOrder);
+          }
+          finalOutput += `Найдено уникальных расхождений: ${diffData.length}\n\n` + diffData.map(d => d.text).join("");
+        }
+
+        output.value = finalOutput;
+        document.getElementById('btnStartFix').style.display = globalConflicts.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('resolutionArea').style.display = 'none';
+      });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function wordDiff(text1, text2) {
+      const w1 = text1.split(/(\s+)/).filter(Boolean);
+      const w2 = text2.split(/(\s+)/).filter(Boolean);
+      const m = w1.length, n = w2.length;
+      const dp = Array.from({length: m+1}, () => Array(n+1).fill(0));
+      for (let i = m-1; i >= 0; i--) {
+        for (let j = n-1; j >= 0; j--) {
+          if (w1[i] === w2[j]) dp[i][j] = 1 + dp[i+1][j+1];
+          else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
+        }
+      }
+      let i = 0, j = 0;
+      let h1 = '', h2 = '';
+      while (i < m || j < n) {
+        if (i < m && j < n && w1[i] === w2[j]) {
+          h1 += escapeHtml(w1[i]);
+          h2 += escapeHtml(w2[j]);
+          i++; j++;
+        } else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) {
+          if (w2[j].trim()) h2 += '<span class="diff-highlight">' + escapeHtml(w2[j]) + '</span>';
+          else h2 += escapeHtml(w2[j]);
+          j++;
+        } else if (i < m && (j >= n || dp[i+1][j] >= dp[i][j+1])) {
+          if (w1[i].trim()) h1 += '<span class="diff-highlight">' + escapeHtml(w1[i]) + '</span>';
+          else h1 += escapeHtml(w1[i]);
+          i++;
+        } else {
+          if (i < m) { h1 += escapeHtml(w1[i]); i++; }
+          if (j < n) { h2 += escapeHtml(w2[j]); j++; }
+        }
+      }
+      return [h1, h2];
+    }
+
+    // === НОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ДУБЛИКАТАМИ ===
+
+    function startFixingDuplicates() {
+      const container = document.getElementById('conflictContainer');
+      const isAllFiles = globalConflicts.length > 0 && globalConflicts[0].mode === 'allfiles';
+
+      if (isAllFiles) {
+        container.innerHTML = `
+          <div style="display: flex; justify-content: center; margin-bottom: 15px; background: #f8f9fa; padding: 15px; border: 1px solid #dee2e6; border-radius: 5px;">
+            <button onclick="transferAllAllFiles()" style="background-color: #17a2b8; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 4px;">⬇️ Перенести ВСЁ первый вариант (в пустые)</button>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 15px; background: #f8f9fa; padding: 15px; border: 1px solid #dee2e6; border-radius: 5px;">
+            <button onclick="transferAll('left')" style="background-color: #17a2b8; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 4px;">⬇️ Перенести ВСЁ слева (в пустые)</button>
+            <span style="align-self: center; font-weight: bold; color: #6c757d;">Массовые действия</span>
+            <button onclick="transferAll('right')" style="background-color: #17a2b8; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 4px;">⬇️ Перенести ВСЁ справа (в пустые)</button>
+          </div>
+        `;
+      }
+
+      globalConflicts.forEach(conflict => {
+        const row = document.createElement('div');
+
+        if (conflict.mode === 'allfiles') {
+          row.className = 'conflict-row conflict-row-allfiles';
+          let variantsHtml = '';
+          const baselineText = conflict.uniqueVariants[0].text;
+          conflict.uniqueVariants.forEach((variant, vIdx) => {
+            const safeFiles = variant.files.join(', ').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let displayText;
+            if (vIdx === 0) {
+              displayText = escapeHtml(variant.text);
+            } else {
+              const [, hVar] = wordDiff(baselineText, variant.text);
+              displayText = hVar;
+            }
+            variantsHtml += `
+              <div class="variant-card">
+                <h4>Вариант ${vIdx + 1} (${variant.files.length} файлов)</h4>
+                <div class="variant-files">${safeFiles}</div>
+                <div class="variant-text">${displayText}</div>
+                <button class="variant-btn" onclick="applyVariantToCenter(${conflict.id}, ${vIdx})">✅ Выбрать вариант</button>
+              </div>
+            `;
+          });
+
+          row.innerHTML = `
+            <div class="jp-context">🇯🇵 Оригинал: ${conflict.jpContext}</div>
+            <div style="width: 100%; margin-bottom: 10px;">
+              <div class="conflict-col conflict-center" style="border: none; padding: 0;">
+                <h4>Единый стандарт (Редактируемо)</h4>
+                <textarea id="center_${conflict.id}" class="conflict-text" style="background: #fffbd1; transition: background 0.3s; min-height: 80px;" oninput="updateCenterColor(${conflict.id})"></textarea>
+              </div>
+            </div>
+            <div class="variant-grid">
+              ${variantsHtml}
+            </div>
+          `;
+        } else {
+          row.className = 'conflict-row';
+          row.innerHTML = `
+            <div style="width: 100%; display: flex; flex-wrap: wrap;">
+              <div class="jp-context">🇯🇵 Оригинал: ${conflict.jpContext}</div>
+              
+              <div class="conflict-col">
+                <h4>${conflict.file1Name}</h4>
+                <textarea id="left_${conflict.id}" class="conflict-text" readonly>${conflict.file1Text}</textarea>
+                <button class="transfer-btn" onclick="applyToCenter(${conflict.id}, 'left')">Выбрать этот вариант ➡️</button>
+              </div>
+
+              <div class="conflict-col conflict-center">
+                <h4>Единый стандарт (Редактируемо)</h4>
+                <textarea id="center_${conflict.id}" class="conflict-text" style="background: #fffbd1; transition: background 0.3s;" oninput="updateCenterColor(${conflict.id})"></textarea>
+              </div>
+
+              <div class="conflict-col">
+                <h4>${conflict.file2Name}</h4>
+                <textarea id="right_${conflict.id}" class="conflict-text" readonly>${conflict.file2Text}</textarea>
+                <button class="transfer-btn" onclick="applyToCenter(${conflict.id}, 'right')">⬅️ Выбрать этот вариант</button>
+              </div>
+            </div>
+          `;
+        }
+        container.appendChild(row);
+      });
+
+      document.getElementById('resolutionArea').style.display = 'block';
+      document.getElementById('resolutionArea').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Обновленная функция (теперь она тоже красит поле в зеленый)
+    function applyToCenter(id, side) {
+      const sourceText = document.getElementById(`${side}_${id}`).value;
+      document.getElementById(`center_${id}`).value = sourceText;
+      updateCenterColor(id); // Вызываем проверку цвета
+    }
+
+    function applyVariantToCenter(id, variantIndex) {
+      const conflict = globalConflicts.find(c => c.id === id);
+      if (!conflict || !conflict.uniqueVariants[variantIndex]) return;
+      const center = document.getElementById(`center_${id}`);
+      const sourceText = conflict.uniqueVariants[variantIndex].fullLines;
+      center.value = sourceText;
+      const selectedOcc = conflict.uniqueVariants[variantIndex].occurrences && conflict.uniqueVariants[variantIndex].occurrences.length > 0
+        ? conflict.uniqueVariants[variantIndex].occurrences[0]
+        : null;
+      if (selectedOcc) {
+        center.dataset.sourceFile = selectedOcc.fileName;
+        center.dataset.sourceLine = String(selectedOcc.ruLineNum);
+      } else {
+        delete center.dataset.sourceFile;
+        delete center.dataset.sourceLine;
+      }
+      updateCenterColor(id);
+    }
+
+    function transferAllAllFiles() {
+      let transferredCount = 0;
+      for (let i = 0; i < globalConflicts.length; i++) {
+        const centerTextarea = document.getElementById(`center_${i}`);
+        if (centerTextarea.value.trim() === '') {
+          const conflict = globalConflicts[i];
+          if (conflict.uniqueVariants && conflict.uniqueVariants.length > 0) {
+            centerTextarea.value = conflict.uniqueVariants[0].fullLines;
+            const defaultOcc = conflict.uniqueVariants[0].occurrences && conflict.uniqueVariants[0].occurrences.length > 0
+              ? conflict.uniqueVariants[0].occurrences[0]
+              : null;
+            if (defaultOcc) {
+              centerTextarea.dataset.sourceFile = defaultOcc.fileName;
+              centerTextarea.dataset.sourceLine = String(defaultOcc.ruLineNum);
+            } else {
+              delete centerTextarea.dataset.sourceFile;
+              delete centerTextarea.dataset.sourceLine;
+            }
+            updateCenterColor(i);
+            transferredCount++;
+          }
+        }
+      }
+      if (transferredCount > 0) {
+        alert(`Успешно заполнено пустых полей: ${transferredCount}`);
+      } else {
+        alert('Все поля уже заполнены! Переносить нечего.');
+      }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Меняет цвет в зависимости от заполненности
+    function updateCenterColor(id) {
+      const centerTextarea = document.getElementById(`center_${id}`);
+      if (centerTextarea.value.trim() !== '') {
+        centerTextarea.style.background = '#d4edda'; // Светло-зеленый (заполнено)
+      } else {
+        centerTextarea.style.background = '#fffbd1'; // Желтоватый (пусто)
+      }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Массовый перенос текста только в пустые поля
+    function transferAll(side) {
+      let transferredCount = 0;
+      
+      for (let i = 0; i < globalConflicts.length; i++) {
+        const centerTextarea = document.getElementById(`center_${i}`);
+        
+        // Проверяем, пустое ли поле (игнорируем пробелы/переносы)
+        if (centerTextarea.value.trim() === '') {
+          const sourceText = document.getElementById(`${side}_${i}`).value;
+          centerTextarea.value = sourceText;
+          updateCenterColor(i); // Красим в зеленый
+          transferredCount++;
+        }
+      }
+      
+      // Небольшой фидбек для пользователя
+      if (transferredCount > 0) {
+        alert(`Успешно заполнено пустых полей: ${transferredCount}`);
+      } else {
+        alert('Все поля уже заполнены! Переносить нечего.');
+      }
+    }
+
+    function saveAndDownloadArchivedFiles() {
+      // 1. Проверяем, есть ли хотя бы один разрешенный конфликт
+      let hasChanges = false;
+      for (let i = 0; i < globalConflicts.length; i++) {
+        const val = document.getElementById(`center_${i}`).value.trim();
+        if (val) {
+          hasChanges = true;
+          break;
+        }
+      }
+
+      if (!hasChanges) {
+        alert("Внимание! Вы не задали ни одного изменения. Пожалуйста, заполните центральную колонку хотя бы для одного конфликта.");
+        return;
+      }
+
+      // 2. Подготавливаем файлы в виде массивов строк (для индексной замены)
+      let fileLinesMap = {};
+      let originalFileLinesMap = {};
+      for (let fn in globalRuFiles) {
+        fileLinesMap[fn] = globalRuFiles[fn].split('\n'); // Сохраняем \r на концах строк
+        originalFileLinesMap[fn] = globalRuFiles[fn].split('\n');
+      }
+
+      // Вспомогательная функция: извлечь полный блок (ShowTextAttributes + ShowText + PlaySE) из оригинального файла
+      function extractFullBlockFromOriginal(lines, showTextLines, lineHint) {
+        if (!lines || !showTextLines || showTextLines.length === 0) return null;
+        let matchIndices = [];
+        const searchFrom = lineHint ? Math.max(0, lineHint - 6) : 0;
+        const searchTo = lineHint ? Math.min(lines.length, lineHint + showTextLines.length + 6) : lines.length;
+        function doFind(from, to) {
+          for (let i = from; i < to; i++) {
+            if (lines[i] === null) continue;
+            let tempIdx = [], si = i, ok = true;
+            for (let k = 0; k < showTextLines.length; k++) {
+              const target = showTextLines[k].trim();
+              let fnd = -1;
+              for (let off = 0; off <= 30; off++) {
+                const ti = si + off;
+                if (ti >= lines.length) break;
+                if (lines[ti] === null) continue;
+                if (lines[ti].trim() === target) { fnd = ti; break; }
+              }
+              if (fnd !== -1) { tempIdx.push(fnd); si = fnd + 1; }
+              else { ok = false; break; }
+            }
+            if (ok) { matchIndices = tempIdx; return true; }
+          }
+          return false;
+        }
+        if (!doFind(searchFrom, searchTo) && lineHint) doFind(0, lines.length);
+        if (matchIndices.length === 0) return null;
+        const firstIdx = matchIndices[0];
+        const lastIdx = matchIndices[matchIndices.length - 1];
+        let blockStart = firstIdx;
+        for (let i = firstIdx - 1; i >= Math.max(0, firstIdx - 5); i--) {
+          if (lines[i] == null) continue;
+          if (lines[i].trim().startsWith('ShowTextAttributes')) { blockStart = i; }
+          else break;
+        }
+        let blockEnd = lastIdx;
+        for (let i = lastIdx + 1; i < Math.min(lines.length, lastIdx + 5); i++) {
+          if (lines[i] == null) continue;
+          const t = lines[i].trim();
+          if (t.startsWith('PlaySE') || t.startsWith('PlayBGM') || t.startsWith('PlayME')) { blockEnd = i; }
+          else break;
+        }
+        return lines.slice(blockStart, blockEnd + 1).filter(l => l != null).map(l => l.replace(/\r$/, ''));
+      }
+
+      // 3. Индексная замена (строго по координатам строк)
+      globalConflicts.forEach(conflict => {
+        const finalResolution = document.getElementById(`center_${conflict.id}`).value;
+        if (!finalResolution.trim()) return;
+
+        const newLinesRaw = finalResolution.split('\n');
+        const newLines = newLinesRaw.map(l => l.replace(/\r$/, ''));
+
+        const replaceInFile = (fileName, oldLinesRaw, newText, startLineHint, sourceFullBlock) => {
+          let lines = fileLinesMap[fileName];
+          if (!lines) return;
+          const originalLines = originalFileLinesMap[fileName] || lines;
+
+          const newLinesRaw = newText.split('\n');
+          const newLines = newLinesRaw.map(l => l.replace(/\r$/, ''));
+
+          let oldLinesClean = oldLinesRaw.map(l => l.replace(/\r$/, '')).filter(l => l.trim() !== '');
+          if (oldLinesClean.length === 0) return;
+
+          // Шаг А: Ищем точные индексы строк этого диалога в массиве файла
+          let matchIndices = [];
+          let searchFrom = 0;
+          let searchTo = lines.length;
+
+          if (startLineHint) {
+            const expectedStart = startLineHint - 1; // 1-based -> 0-based
+            searchFrom = Math.max(0, expectedStart - 5);
+            searchTo = Math.min(lines.length, expectedStart + oldLinesClean.length + 5);
+          }
+
+          function doSearch(from, to) {
+            for (let i = from; i < to; i++) {
+              if (originalLines[i] == null) continue;
+              
+              let tempIndices = [];
+              let searchIdx = i;
+              let isMatch = true;
+
+              for (let k = 0; k < oldLinesClean.length; k++) {
+                let target = oldLinesClean[k].trim();
+                let foundAt = -1;
+                
+                // Ищем следующую строку с допуском до 30 скрытых скриптов между текстом
+                for (let offset = 0; offset <= 30; offset++) { 
+                  let testIdx = searchIdx + offset;
+                  if (testIdx >= originalLines.length) break;
+                  if (originalLines[testIdx] == null) continue;
+
+                  if (originalLines[testIdx].trim() === target) {
+                    foundAt = testIdx;
+                    break;
+                  }
+                }
+
+                if (foundAt !== -1) {
+                  tempIndices.push(foundAt);
+                  searchIdx = foundAt + 1; // Следующую строку ищем только после текущей
+                } else {
+                  isMatch = false;
+                  break;
+                }
+              }
+
+              if (isMatch) {
+                matchIndices = tempIndices; // Нашли весь блок целиком!
+                return true;
+              }
+            }
+            return false;
+          }
+
+          let found = doSearch(searchFrom, searchTo);
+          if (!found && startLineHint) {
+            // Fallback: искать по всему файлу, если в узком диапазоне не нашли
+            found = doSearch(0, lines.length);
+          }
+
+          if (!found) {
+            console.warn(`Не удалось найти блок для замены в файле ${fileName} (возможно, он уже был изменён)`);
+            return;
+          }
+
+          const firstIdx = matchIndices[0];
+          const lastIdx = matchIndices[matchIndices.length - 1];
+
+          // Если передан полный блок-источник — заменяем весь целевой блок целиком (структура + текст)
+          if (sourceFullBlock && sourceFullBlock.length > 0) {
+            let blockStart = firstIdx;
+            const sourceStartsWithAttr = sourceFullBlock[0].trim().startsWith('ShowTextAttributes');
+            if (sourceStartsWithAttr) {
+              for (let i = firstIdx - 1; i >= Math.max(0, firstIdx - 5); i--) {
+                if (originalLines[i] == null) continue;
+                if (originalLines[i].trim().startsWith('ShowTextAttributes')) { blockStart = i; }
+                else break;
+              }
+            }
+            let blockEnd = lastIdx;
+            for (let i = lastIdx + 1; i < Math.min(lines.length, lastIdx + 5); i++) {
+              if (originalLines[i] == null) continue;
+              const t = originalLines[i].trim();
+              if (t.startsWith('PlaySE') || t.startsWith('PlayBGM') || t.startsWith('PlayME')) { blockEnd = i; }
+              else break;
+            }
+            let hasCR = lines[blockStart].endsWith('\r');
+            let targetIndentMatch = lines[blockStart].match(/^(\s*)/);
+            let targetIndent = targetIndentMatch ? targetIndentMatch[1] : '';
+            const sourceBaseIndent = ((sourceFullBlock[0] || '').match(/^(\s*)/) || ['', ''])[1];
+            const currentBlockLines = originalLines
+              .slice(blockStart, blockEnd + 1)
+              .filter(l => l != null)
+              .map(l => l.replace(/\r$/, ''));
+            const currentBlockAttrs = currentBlockLines.filter(l => l.trim().startsWith('ShowTextAttributes'));
+            let previousAttrLine = null;
+            for (let i = blockStart - 1; i >= 0; i--) {
+              if (originalLines[i] == null) continue;
+              const candidate = originalLines[i].replace(/\r$/, '');
+              if (candidate.trim().startsWith('ShowTextAttributes')) {
+                previousAttrLine = candidate;
+                break;
+              }
+            }
+            const withTargetIndent = (rawLine) => {
+              const cleanLine = rawLine.replace(/\r$/, '');
+              if (cleanLine.trim() === '') return '';
+              const sourceIndent = (cleanLine.match(/^(\s*)/) || ['', ''])[1];
+              const relativeIndent = sourceIndent.length - sourceBaseIndent.length;
+              const targetIndentLen = Math.max(0, targetIndent.length + relativeIndent);
+              return ' '.repeat(targetIndentLen) + cleanLine.slice(sourceIndent.length);
+            };
+            let showTextIdx = 0;
+            let attrIdx = 0;
+            const newBlockLines = sourceFullBlock.map(l => {
+              if (l.trim().startsWith('ShowText(') && showTextIdx < newLines.length) {
+                const newLine = newLines[showTextIdx++];
+                const newIndent = (newLine.match(/^(\s*)/) || ['',''])[1];
+                return targetIndent + newLine.slice(newIndent.length);
+              }
+              if (l.trim().startsWith('ShowTextAttributes')) {
+                const currentAttrLine = currentBlockAttrs[attrIdx] || null;
+                let attrLineToUse = l;
+                if (currentAttrLine && currentAttrLine.trim() !== l.trim()) {
+                  attrLineToUse = currentAttrLine;
+                } else if (!currentAttrLine && previousAttrLine && previousAttrLine.trim() !== l.trim()) {
+                  attrLineToUse = previousAttrLine;
+                }
+                attrIdx++;
+                return withTargetIndent(attrLineToUse);
+              }
+              return withTargetIndent(l);
+            });
+            lines[blockStart] = newBlockLines.join(hasCR ? '\r\n' : '\n') + (hasCR ? '\r' : '');
+            for (let i = blockStart + 1; i <= blockEnd; i++) {
+              lines[i] = null;
+            }
+            return;
+          }
+
+          // Шаг Б: Точечная замена по найденным индексам
+          for (let j = 0; j < matchIndices.length; j++) {
+            let targetIdx = matchIndices[j];
+            let originalLine = lines[targetIdx];
+            let hasCR = originalLine.endsWith('\r');
+            
+            let targetIndentMatch = originalLine.match(/^(\s*)/);
+            let targetIndent = targetIndentMatch ? targetIndentMatch[1] : '';
+
+            if (j < matchIndices.length - 1) {
+              // Это НЕ последняя старая строка
+              if (j < newLines.length) {
+                let sourceIndentMatch = newLines[j].match(/^(\s*)/);
+                let sourceIndent = sourceIndentMatch ? sourceIndentMatch[1] : '';
+                if (newLines[j].trim() === '') {
+                  lines[targetIdx] = hasCR ? '\r' : '';
+                } else {
+                  lines[targetIdx] = targetIndent + newLines[j].slice(sourceIndent.length) + (hasCR ? '\r' : '');
+                }
+              } else {
+                // Если новые кончились, старую метим на удаление
+                lines[targetIdx] = null; 
+              }
+            } else {
+              // Это ПОСЛЕДНЯЯ старая строка
+              if (j < newLines.length) {
+                // Впихиваем сюда все ОСТАВШИЕСЯ новые строки
+                let combined = [];
+                for (let k = j; k < newLines.length; k++) {
+                  let sourceIndentMatch = newLines[k].match(/^(\s*)/);
+                  let sourceIndent = sourceIndentMatch ? sourceIndentMatch[1] : '';
+                  if (newLines[k].trim() === '') {
+                    combined.push('');
+                  } else {
+                    combined.push(targetIndent + newLines[k].slice(sourceIndent.length));
+                  }
+                }
+                lines[targetIdx] = combined.join(hasCR ? '\r\n' : '\n') + (hasCR ? '\r' : '');
+              } else {
+                lines[targetIdx] = null;
+              }
+            }
+          }
+        };
+
+        if (conflict.mode === 'allfiles' && conflict.occurrences) {
+          const centerEl = document.getElementById(`center_${conflict.id}`);
+          const selectedSourceFile = centerEl ? centerEl.dataset.sourceFile : null;
+          const selectedSourceLine = centerEl && centerEl.dataset.sourceLine ? parseInt(centerEl.dataset.sourceLine, 10) : NaN;
+          // Найти исходное вхождение (то, чей ruFullLines совпадает с finalResolution)
+          let sourceOcc = null;
+          if (selectedSourceFile && !isNaN(selectedSourceLine)) {
+            sourceOcc = conflict.occurrences.find(occ =>
+              occ.fileName === selectedSourceFile && occ.ruLineNum === selectedSourceLine
+            ) || null;
+            // Если пользователь вручную изменил центр, не навязываем старый источник
+            if (sourceOcc && normalizeRuText(sourceOcc.ruFullLines) !== normalizeRuText(finalResolution)) {
+              sourceOcc = null;
+            }
+          }
+          for (const occ of conflict.occurrences) {
+            if (sourceOcc) break;
+            if (normalizeRuText(occ.ruFullLines) === normalizeRuText(finalResolution)) {
+              sourceOcc = occ;
+              break;
+            }
+          }
+          // Извлечь полный блок источника из оригинального файла (до любых замен)
+          let sourceFullBlock = null;
+          if (sourceOcc && globalRuFiles[sourceOcc.fileName]) {
+            const srcLines = globalRuFiles[sourceOcc.fileName].split('\n');
+            const srcShowLines = sourceOcc.ruFullLines.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim() !== '');
+            sourceFullBlock = extractFullBlockFromOriginal(srcLines, srcShowLines, sourceOcc.ruLineNum);
+          }
+          conflict.occurrences.forEach(occ => {
+            const oldLinesRaw = occ.ruFullLines.split('\n');
+            // Для источника структура уже правильная — используем обычную замену
+            const useFullBlock = (sourceOcc && occ !== sourceOcc) ? sourceFullBlock : null;
+            replaceInFile(occ.fileName, oldLinesRaw, finalResolution, occ.ruLineNum, useFullBlock);
+          });
+        } else {
+          const oldLines1Raw = conflict.file1Text.split('\n');
+          const oldLines2Raw = conflict.file2Text.split('\n');
+          const norm1 = normalizeRuText(conflict.file1Text);
+          const norm2 = normalizeRuText(conflict.file2Text);
+          const normRes = normalizeRuText(finalResolution);
+          // Определяем источник (чей текст совпадает с finalResolution) и извлекаем полный блок
+          let cmpFullBlock = null;
+          if (norm1 === normRes && globalRuFiles[conflict.file1Name]) {
+            const srcLines = globalRuFiles[conflict.file1Name].split('\n');
+            const srcShowLines = conflict.file1Text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim() !== '');
+            cmpFullBlock = extractFullBlockFromOriginal(srcLines, srcShowLines, conflict.file1Line);
+          } else if (norm2 === normRes && globalRuFiles[conflict.file2Name]) {
+            const srcLines = globalRuFiles[conflict.file2Name].split('\n');
+            const srcShowLines = conflict.file2Text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim() !== '');
+            cmpFullBlock = extractFullBlockFromOriginal(srcLines, srcShowLines, conflict.file2Line);
+          }
+          // Для источника структура уже правильная; для цели используем полный блок
+          replaceInFile(conflict.file1Name, oldLines1Raw, finalResolution, conflict.file1Line,
+            norm2 === normRes ? cmpFullBlock : null);
+          replaceInFile(conflict.file2Name, oldLines2Raw, finalResolution, conflict.file2Line,
+            norm1 === normRes ? cmpFullBlock : null);
+        }
+      });
+
+      // 4. Собираем файлы обратно (отфильтровывая null) и создаем ZIP
+      const zip = new JSZip();
+      let filesAddedCount = 0;
+
+      for (let fn in fileLinesMap) {
+        let newContent = fileLinesMap[fn].filter(l => l !== null).join('\n');
+        if (newContent !== globalRuFiles[fn]) {
+          zip.file(fn, newContent);
+          filesAddedCount++;
+        }
+      }
+
+      if (filesAddedCount === 0) {
+        alert('Не было внесено никаких фактических изменений (возможно, вы ввели тот же текст, что и был).');
+        return;
+      }
+
+      zip.generateAsync({ type: "blob" }).then(function(content) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = "Fixed_Translations.zip";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert('Архив с исправленными файлами успешно скачан!');
+      }).catch(err => {
+        console.error(err);
+        alert('Произошла ошибка при создании архива.');
+      });
+    }
+
+  </script>
+
+</body>
+
+</html>
